@@ -6,4 +6,6 @@
 #
 
 from wxnat.browser import (XNATBrowserPanel,
-                           XNATBrowserDialog)
+                           XNATBrowserDialog,
+                           XNATFileSelectEvent,
+                           EVT_XNAT_FILE_SELECT_EVENT)

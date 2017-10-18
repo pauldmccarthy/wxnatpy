@@ -16,38 +16,6 @@ import fsleyes_widgets.autotextctrl         as autotext
 import fsleyes_widgets.widgetgrid           as wgrid
 
 
-"""
--------------------------------------------------------
-| Host:     | Username:     | Password:     | Connect |
--------------------------------------------------------
-| Project drop down box                               |
-| experiment filter                                   |
-| subject filter                                      |
--------------------------------------------------------
-|Project
-| - Project level file
-| - Project level file
-| - Project level file
-| - Subject 1
-|   - Subject level file
-|   - Experiment 1
-      - Experiment level file
-|     - Scan 1
-|       - Scan file 1
-|       - Scan file 2
-|     - Scan 2
-|       - Scan file 1
-|       - Scan file 2
-|   - Experiment 2
-|     - Experiment level file
-|  - Subject 2
-
-| Load | Cancel                                       |
--------------------------------------------------------
-
-"""
-
-
 
 XNAT_HIERARCHY = {
     'projects'    : ['subjects',           'resources'],
@@ -159,13 +127,6 @@ class XNATBrowserPanel(wx.Panel):
         self.__connect      .SetLabel(LABELS['connect'])
         self.__projectLabel .SetLabel(LABELS['project'])
 
-        self.__host    .SetValue('xw2017-01.xnat.org')
-        self.__username.SetValue('admin')
-        self.__password.SetValue('R0tt3rd@m')
-        # self.__host    .SetValue('10.1.1.17')
-        # self.__username.SetValue('admin')
-        # self.__password.SetValue('admin')
-
         self.__loginSizer   = wx.BoxSizer(wx.HORIZONTAL)
         self.__projectSizer = wx.BoxSizer(wx.HORIZONTAL)
         self.__mainSizer    = wx.BoxSizer(wx.VERTICAL)
@@ -210,15 +171,36 @@ class XNATBrowserPanel(wx.Panel):
         self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
 
         self.__session = None
-        self.disconnect()
+        self.EndSession()
 
 
-    def connect(self, host, username=None, password=None):
+    def GetSelectedFiles(self):
+        """
+        """
+        items = self.__browser.GetSelections()
+        files = []
+
+        for i in items:
+
+            obj, level = self.__browser.GetItemData(i)
+
+            if level[:-1] == 'file':
+                files.append(obj)
+
+        return files
+
+
+    def DownloadFile(self, fobj, dest):
+        fobj.download(dest)
+
+
+
+    def StartSession(self, host, username=None, password=None):
         """
         """
 
-        if self.isConnected():
-            self.disconnect()
+        if self.SessionActive():
+            self.EndSession()
 
         # TOOD show a message while connecting
         # TODO show error and return
@@ -231,7 +213,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__status.SetForegroundColour('#00ff00')
 
 
-    def disconnect(self):
+    def EndSession(self):
 
         if self.__session is not None:
             self.__session.disconnect()
@@ -243,14 +225,14 @@ class XNATBrowserPanel(wx.Panel):
         self.__project.Clear()
 
 
-    def isConnected(self):
+    def SessionActive(self):
         return self.__session is not None
 
 
     def __onConnect(self, ev):
 
-        if self.isConnected():
-            self.disconnect()
+        if self.SessionActive():
+            self.EndSession()
             return
 
         host     = self.__host    .GetValue()
@@ -264,7 +246,7 @@ class XNATBrowserPanel(wx.Panel):
         if username == '': username = None
         if password == '': password = None
 
-        self.connect(host, username, password)
+        self.StartSession(host, username, password)
 
         # TOOD show a message while loading projects
         # TODO bail if no projects
@@ -357,10 +339,7 @@ class XNATBrowserPanel(wx.Panel):
 
         for att in XNAT_INFO_ATTS[otype]:
             print('Lookup {}.{} [{}]'.format(otype, att, obj))
-            try:
-                rows.append((att, str(getattr(obj, att))))
-            except Exception:
-                continue
+            rows.append((att, str(getattr(obj, att))))
 
         if level in XNAT_HIERARCHY:
             for catt in XNAT_HIERARCHY[level]:
@@ -412,8 +391,7 @@ class XNATBrowserDialog(wx.Dialog):
 
 
 if __name__ == '__main__':
-    app   = wx.App()
-    # frame = wx.Frame(None)
+    app = wx.App()
     dlg = XNATBrowserDialog(None)
     dlg.SetSize((-1, 500))
     dlg.Show()
