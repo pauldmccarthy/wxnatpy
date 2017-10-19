@@ -85,6 +85,7 @@ LABELS = {
     'disconnect'   : 'Disconnect',
     'connecting'   : 'Connecting to {} ...',
     'project'      : 'Project',
+    'refresh'      : 'Refresh',
     'connected'    : u'\u2022',
     'disconnected' : u'\u2022',
 
@@ -219,6 +220,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__connect  = wx.Button(self)
         self.__status   = wx.StaticText(self)
         self.__project  = wx.Choice(self)
+        self.__refresh  = wx.Button(self)
         self.__splitter = wx.SplitterWindow(self,
                                             style=(wx.SP_LIVE_UPDATE |
                                                    wx.SP_BORDER))
@@ -265,6 +267,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__passwordLabel.SetLabel(LABELS['password'])
         self.__connect      .SetLabel(LABELS['connect'])
         self.__projectLabel .SetLabel(LABELS['project'])
+        self.__refresh      .SetLabel(LABELS['refresh'])
 
         self.__loginSizer   = wx.BoxSizer(wx.HORIZONTAL)
         self.__projectSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -293,6 +296,8 @@ class XNATBrowserPanel(wx.Panel):
         self.__projectSizer.Add((5, 1))
         self.__projectSizer.Add(self.__project, proportion=1)
         self.__projectSizer.Add((5, 1))
+        self.__projectSizer.Add(self.__refresh)
+        self.__projectSizer.Add((5, 1))
 
         self.__mainSizer.Add(self.__loginSizer, flag=wx.EXPAND)
         self.__mainSizer.Add((1, 10))
@@ -305,6 +310,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__host   .Bind(autotext.EVT_ATC_TEXT_ENTER, self.__onHost)
         self.__connect.Bind(wx.EVT_BUTTON,               self.__onConnect)
         self.__project.Bind(wx.EVT_CHOICE,               self.__onProject)
+        self.__refresh.Bind(wx.EVT_BUTTON,               self.__onRefresh)
         self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED,  self.__onTreeActivate)
         self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,     self.__onTreeSelect)
 
@@ -401,7 +407,11 @@ class XNATBrowserPanel(wx.Panel):
 
             def update(nbytes, total, finished):
 
-                dlg.Update(nbytes, msg.format(fname, nbytes, total))
+                nmb = nbytes / 1048576.
+                tmb = total  / 1048576.
+
+                dlg.Update(nbytes, msg.format(fname, nmb, tmb))
+                dlg.Fit()
 
                 if finished:
                     dlg.EndModal(wx.ID_OK)
@@ -564,6 +574,16 @@ class XNATBrowserPanel(wx.Panel):
             image=self.__unloadedFolderImageId)
 
         self.__onTreeSelect(item=root)
+
+
+    def __onRefresh(self, ev):
+        """Called when the *Refresh* button is pushed. Clears the tree
+        browser, and clears the cache of all items that have been downloaded
+        from the XNAT server.
+        """
+        if self.SessionActive():
+            self.__session.clearcache()
+            self.__onProject()
 
 
     def __onTreeActivate(self, ev=None, item=None):
