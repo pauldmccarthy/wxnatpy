@@ -16,15 +16,15 @@ and *Download* and *Cancel* buttons.
 
 
 import os.path         as op
-import                    threading
+import                    re
 
 import                    wx
 import wx.lib.newevent as wxevent
 
 import xnat
 
-import fsleyes_widgets.placeholder_textctrl as plctext
-import fsleyes_widgets.autotextctrl         as autotext
+import fsleyes_widgets.placeholder_textctrl as pt
+import fsleyes_widgets.autotextctrl         as at
 import fsleyes_widgets.utils.status         as status
 import fsleyes_widgets.utils.progress       as progress
 import fsleyes_widgets.widgetgrid           as wgrid
@@ -214,20 +214,22 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__knownAccounts = dict(knownAccounts)
 
-        self.__host       = autotext.AutoTextCtrl(self)
-        self.__username   = plctext.PlaceholderTextCtrl(self,
-                                                        placeholder='username')
-        self.__password   = plctext.PlaceholderTextCtrl(self,
-                                                        placeholder='password',
-                                                        style=wx.TE_PASSWORD)
+        self.__host       = at.AutoTextCtrl(self)
+        self.__username   = pt.PlaceholderTextCtrl(self,
+                                                   placeholder='username')
+        self.__password   = pt.PlaceholderTextCtrl(self,
+                                                   placeholder='password',
+                                                   style=wx.TE_PASSWORD)
         self.__connect    = wx.Button(self)
         self.__status     = wx.StaticText(self)
         self.__project    = wx.Choice(self)
         self.__refresh    = wx.Button(self)
-        self.__subjFilter = plctext.PlaceholderTextCtrl(self,
-                                                        placeholder='regexp')
-        self.__expFilter  = plctext.PlaceholderTextCtrl(self,
-                                                        placeholder='regexp')
+        self.__subjFilter = pt.PlaceholderTextCtrl(self,
+                                                   placeholder='regexp',
+                                                   style=wx.TE_PROCESS_ENTER)
+        self.__expFilter  = pt.PlaceholderTextCtrl(self,
+                                                   placeholder='regexp',
+                                                   style=wx.TE_PROCESS_ENTER)
         self.__splitter   = wx.SplitterWindow(self,
                                               style=(wx.SP_LIVE_UPDATE |
                                                      wx.SP_BORDER))
@@ -270,6 +272,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__expFilterLabel  = wx.StaticText(self)
 
         self.__status.SetFont(self.__status.GetFont().Larger().Larger())
+        self.__info.SetColours(border=self.__info._defaultEvenColour)
         self.__host           .AutoComplete(knownHosts)
         self.__hostLabel      .SetLabel(LABELS['host'])
         self.__usernameLabel  .SetLabel(LABELS['username'])
@@ -280,10 +283,9 @@ class XNATBrowserPanel(wx.Panel):
         self.__expFilterLabel .SetLabel(LABELS['expFilter'])
         self.__refresh        .SetLabel(LABELS['refresh'])
 
-        self.__loginSizer   = wx.BoxSizer(wx.HORIZONTAL)
-        self.__projectSizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.__filterSizer  = wx.BoxSizer(wx.HORIZONTAL)
-        self.__mainSizer    = wx.BoxSizer(wx.VERTICAL)
+        self.__loginSizer  = wx.BoxSizer(wx.HORIZONTAL)
+        self.__filterSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.__mainSizer   = wx.BoxSizer(wx.VERTICAL)
 
         self.__loginSizer.Add((5, 1))
         self.__loginSizer.Add(self.__hostLabel)
@@ -303,14 +305,10 @@ class XNATBrowserPanel(wx.Panel):
         self.__loginSizer.Add(self.__status)
         self.__loginSizer.Add((5, 1))
 
-        self.__projectSizer.Add((5, 1))
-        self.__projectSizer.Add(self.__projectLabel)
-        self.__projectSizer.Add((5, 1))
-        self.__projectSizer.Add(self.__project, proportion=1)
-        self.__projectSizer.Add((5, 1))
-        self.__projectSizer.Add(self.__refresh)
-        self.__projectSizer.Add((5, 1))
-
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__projectLabel)
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__project, proportion=1)
         self.__filterSizer.Add((5, 1))
         self.__filterSizer.Add(self.__subjFilterLabel)
         self.__filterSizer.Add((5, 1))
@@ -320,10 +318,10 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterSizer.Add((5, 1))
         self.__filterSizer.Add(self.__expFilter, proportion=1)
         self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__refresh)
+        self.__filterSizer.Add((5, 1))
 
         self.__mainSizer.Add(self.__loginSizer, flag=wx.EXPAND)
-        self.__mainSizer.Add((1, 10))
-        self.__mainSizer.Add(self.__projectSizer, flag=wx.EXPAND)
         self.__mainSizer.Add((1, 10))
         self.__mainSizer.Add(self.__filterSizer, flag=wx.EXPAND)
         self.__mainSizer.Add((1, 10))
@@ -536,12 +534,17 @@ class XNATBrowserPanel(wx.Panel):
             try:
                 self.__session.disconnect()
             except Exception:
-                self.__session = None
+                # TODO log
+                pass
+            self.__session = None
 
         self.__connect.SetLabel(LABELS['connect'])
         self.__status.SetLabel(LABELS['disconnected'])
         self.__status.SetForegroundColour('#ff0000')
         self.__project.Clear()
+        self.__browser.DeleteAllItems()
+        self.__info.ClearGrid()
+        self.__info.Refresh()
 
 
     def __onHost(self, ev):
@@ -592,7 +595,10 @@ class XNATBrowserPanel(wx.Panel):
         """
 
         project = self.__project.GetString(self.__project.GetSelection())
-        label  = LABELS['project']
+        label   = LABELS['project']
+
+        # TODO If project hasn't changed, you should
+        #      re-generate the current tree contents
 
         self.__browser.DeleteAllItems()
 
@@ -620,11 +626,43 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def __onSubjectFilter(self, ev):
-        pass
+        """Called when the user pushes the enter key in the subject filter
+        field. Refreshes the tree browser with the new filter value.
+        """
+        if self.SessionActive():
+            self.__onProject()
 
 
     def __onExperimentFilter(self, ev):
-        pass
+        """Called when the user pushes the enter key in the experiment filter
+        field. Refreshes the tree browser with the new filter value.
+        """
+        if self.SessionActive():
+            self.__onProject()
+
+
+    def __filterItem(self, level, name):
+        """Tests the given ``name`` to see if it should be filtered from the
+        tree browser.
+
+        :arg level: XNAT hierarchy level, e.g. ``'subject'``, ``'experiment'``,
+                    etc.
+
+        :arg name:  Name of item to test.
+
+        :returns:   ``True`` if the given item should be filtered, ``False``
+                    otherwise.
+        """
+
+        pattern = ''
+
+        if   level == 'subject':    pattern = self.__subjFilter.GetValue()
+        elif level == 'experiment': pattern = self.__expFilter .GetValue()
+
+        if pattern.strip() == '':
+            return False
+
+        return re.search(pattern, name, flags=re.IGNORECASE) is None
 
 
     def __onTreeActivate(self, ev=None, item=None):
@@ -680,6 +718,9 @@ class XNATBrowserPanel(wx.Panel):
 
                 name  = getattr(child, XNAT_NAME_ATT[catt])
                 label = LABELS[catt]
+
+                if self.__filterItem(catt, name):
+                    continue
 
                 if catt == 'file': image = self.__fileImageId
                 else:              image = self.__unloadedFolderImageId
