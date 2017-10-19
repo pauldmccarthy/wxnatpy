@@ -89,6 +89,9 @@ LABELS = {
     'connected'    : u'\u2022',
     'disconnected' : u'\u2022',
 
+    'subjFilter' : 'Filter by subject',
+    'expFilter'  : 'by experiment',
+
     'connect.error.title'   : 'Connection error',
     'connect.error.message' :
     'An error occurred while trying to connect to {}',
@@ -150,7 +153,7 @@ interface.
 
 
 XNAT_INFO_FORMATTERS = {
-    'rseource.file_size' : lambda s: '{:0.2f} MB'.format(float(s) / 1048576),
+    'resource.file_size' : lambda s: '{:0.2f} MB'.format(float(s) / 1048576),
     'file.size'          : lambda s: '{:0.2f} MB'.format(float(s) / 1048576)
 }
 """This dictionary contains string formatters for some attributes that are
@@ -211,25 +214,29 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__knownAccounts = dict(knownAccounts)
 
-        self.__host     = autotext.AutoTextCtrl(self)
-        self.__username = plctext.PlaceholderTextCtrl(self,
-                                                      placeholder='username')
-        self.__password = plctext.PlaceholderTextCtrl(self,
-                                                      placeholder='password',
-                                                      style=wx.TE_PASSWORD)
-        self.__connect  = wx.Button(self)
-        self.__status   = wx.StaticText(self)
-        self.__project  = wx.Choice(self)
-        self.__refresh  = wx.Button(self)
-        self.__splitter = wx.SplitterWindow(self,
-                                            style=(wx.SP_LIVE_UPDATE |
-                                                   wx.SP_BORDER))
-        self.__info     = wgrid.WidgetGrid(self.__splitter)
-        self.__browser  = wx.TreeCtrl(self.__splitter,
-                                      style=(wx.TR_MULTIPLE    |
-                                             wx.TR_NO_LINES    |
-                                             wx.TR_HAS_BUTTONS |
-                                             wx.TR_TWIST_BUTTONS))
+        self.__host       = autotext.AutoTextCtrl(self)
+        self.__username   = plctext.PlaceholderTextCtrl(self,
+                                                        placeholder='username')
+        self.__password   = plctext.PlaceholderTextCtrl(self,
+                                                        placeholder='password',
+                                                        style=wx.TE_PASSWORD)
+        self.__connect    = wx.Button(self)
+        self.__status     = wx.StaticText(self)
+        self.__project    = wx.Choice(self)
+        self.__refresh    = wx.Button(self)
+        self.__subjFilter = plctext.PlaceholderTextCtrl(self,
+                                                        placeholder='regexp')
+        self.__expFilter  = plctext.PlaceholderTextCtrl(self,
+                                                        placeholder='regexp')
+        self.__splitter   = wx.SplitterWindow(self,
+                                              style=(wx.SP_LIVE_UPDATE |
+                                                     wx.SP_BORDER))
+        self.__info       = wgrid.WidgetGrid(self.__splitter)
+        self.__browser    = wx.TreeCtrl(self.__splitter,
+                                        style=(wx.TR_MULTIPLE    |
+                                               wx.TR_NO_LINES    |
+                                               wx.TR_HAS_BUTTONS |
+                                               wx.TR_TWIST_BUTTONS))
 
         self.__splitter.SetMinimumPaneSize(50)
         self.__splitter.SplitHorizontally(self.__info, self.__browser)
@@ -255,22 +262,27 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__browser.AssignImageList(imageList)
 
-        self.__hostLabel     = wx.StaticText(self)
-        self.__usernameLabel = wx.StaticText(self)
-        self.__passwordLabel = wx.StaticText(self)
-        self.__projectLabel  = wx.StaticText(self)
+        self.__hostLabel       = wx.StaticText(self)
+        self.__usernameLabel   = wx.StaticText(self)
+        self.__passwordLabel   = wx.StaticText(self)
+        self.__projectLabel    = wx.StaticText(self)
+        self.__subjFilterLabel = wx.StaticText(self)
+        self.__expFilterLabel  = wx.StaticText(self)
 
         self.__status.SetFont(self.__status.GetFont().Larger().Larger())
-        self.__host         .AutoComplete(knownHosts)
-        self.__hostLabel    .SetLabel(LABELS['host'])
-        self.__usernameLabel.SetLabel(LABELS['username'])
-        self.__passwordLabel.SetLabel(LABELS['password'])
-        self.__connect      .SetLabel(LABELS['connect'])
-        self.__projectLabel .SetLabel(LABELS['project'])
-        self.__refresh      .SetLabel(LABELS['refresh'])
+        self.__host           .AutoComplete(knownHosts)
+        self.__hostLabel      .SetLabel(LABELS['host'])
+        self.__usernameLabel  .SetLabel(LABELS['username'])
+        self.__passwordLabel  .SetLabel(LABELS['password'])
+        self.__connect        .SetLabel(LABELS['connect'])
+        self.__projectLabel   .SetLabel(LABELS['project'])
+        self.__subjFilterLabel.SetLabel(LABELS['subjFilter'])
+        self.__expFilterLabel .SetLabel(LABELS['expFilter'])
+        self.__refresh        .SetLabel(LABELS['refresh'])
 
         self.__loginSizer   = wx.BoxSizer(wx.HORIZONTAL)
         self.__projectSizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.__filterSizer  = wx.BoxSizer(wx.HORIZONTAL)
         self.__mainSizer    = wx.BoxSizer(wx.VERTICAL)
 
         self.__loginSizer.Add((5, 1))
@@ -299,9 +311,21 @@ class XNATBrowserPanel(wx.Panel):
         self.__projectSizer.Add(self.__refresh)
         self.__projectSizer.Add((5, 1))
 
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__subjFilterLabel)
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__subjFilter, proportion=1)
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__expFilterLabel)
+        self.__filterSizer.Add((5, 1))
+        self.__filterSizer.Add(self.__expFilter, proportion=1)
+        self.__filterSizer.Add((5, 1))
+
         self.__mainSizer.Add(self.__loginSizer, flag=wx.EXPAND)
         self.__mainSizer.Add((1, 10))
         self.__mainSizer.Add(self.__projectSizer, flag=wx.EXPAND)
+        self.__mainSizer.Add((1, 10))
+        self.__mainSizer.Add(self.__filterSizer, flag=wx.EXPAND)
         self.__mainSizer.Add((1, 10))
         self.__mainSizer.Add(self.__splitter, flag=wx.EXPAND, proportion=1)
 
@@ -313,6 +337,9 @@ class XNATBrowserPanel(wx.Panel):
         self.__refresh.Bind(wx.EVT_BUTTON,               self.__onRefresh)
         self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED,  self.__onTreeActivate)
         self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,     self.__onTreeSelect)
+
+        self.__subjFilter.Bind(wx.EVT_TEXT_ENTER, self.__onSubjectFilter)
+        self.__expFilter .Bind(wx.EVT_TEXT_ENTER, self.__onExperimentFilter)
 
         self.__session = None
         self.__endSession()
@@ -469,31 +496,37 @@ class XNATBrowserPanel(wx.Panel):
                 LABELS['connect.error.message'].format(host),
                 error)
 
+        cancelled = [False]
+
         def connect():
 
             error = None
 
             for host in hosts:
-
                 try:
                     session = xnat.connect(host,
                                            user=username,
                                            password=password)
-                    wx.CallAfter(success, session, host)
+
+                    if not cancelled[0]:
+                        wx.CallAfter(success, session, host)
                     return
 
                 except Exception as e:
                     error = e
+                    if cancelled[0]:
+                        return
 
-            wx.CallAfter(failure, error)
+            if not cancelled[0]:
+                wx.CallAfter(failure, error)
 
-        progress.Bounce.runWithBounce(
+        cancelled[0] = not progress.Bounce.runWithBounce(
             connect,
             'Connecting',
             LABELS['connecting'].format(host),
             style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT)
 
-        return self.__session is not None
+        return not cancelled[0] and self.__session is not None
 
 
     def __endSession(self):
@@ -584,6 +617,14 @@ class XNATBrowserPanel(wx.Panel):
         if self.SessionActive():
             self.__session.clearcache()
             self.__onProject()
+
+
+    def __onSubjectFilter(self, ev):
+        pass
+
+
+    def __onExperimentFilter(self, ev):
+        pass
 
 
     def __onTreeActivate(self, ev=None, item=None):
