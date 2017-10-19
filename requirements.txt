@@ -1,3 +1,3 @@
-fsleyes-widgets>=0.0.6,<1
-xnat>=0.3.2,<1
+fsleyes-widgets>=0.1,<1
+xnat>=0.3.3,<1
 wxpython==4
