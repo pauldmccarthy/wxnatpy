@@ -422,13 +422,26 @@ class XNATBrowserPanel(wx.Panel):
     def DownloadFile(self, fobj, dest, showProgress=True):
         """Download the given ``xnat`` file object to the path specified by
         ``dest``.
+
+        :arg fobj:         An XNAT file object, as returned by
+                           :meth:`GetSelectedFiles`.
+
+        :arg dest:         Directory to download the file to.
+
+        :arg showProgress: If ``True``, a ``wx.ProgressDialog`` is shown,
+                           displaying the download progress.
+
+        :returns:          Path to the downloaded file, or ``None`` if the
+                           download was cancelled.. Note that the path may
+                           be different to ``dest``, as the user may be
+                           prompted to select a different locaion.
         """
 
         fname = fobj.id
         fsize = fobj.size
 
         # if destination already exists, ask
-        # thed user if they want to skip,
+        # the user if they want to skip,
         # overwrite, or choose a new name
         if op.exists(dest):
 
@@ -461,7 +474,7 @@ class XNATBrowserPanel(wx.Panel):
 
                 # skip
                 elif choice == wx.ID_CANCEL:
-                    return
+                    return None
 
                 # choose a new destination
                 elif choice == wx.ID_NO:
@@ -514,6 +527,8 @@ class XNATBrowserPanel(wx.Panel):
 
         if showProgress:
             dlg.Close()
+
+        return dest
 
 
     def SessionActive(self):
