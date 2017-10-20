@@ -329,7 +329,7 @@ class XNATBrowserPanel(wx.Panel):
 
         self.SetSizer(self.__mainSizer)
 
-        self.__host   .Bind(autotext.EVT_ATC_TEXT_ENTER, self.__onHost)
+        self.__host   .Bind(at.EVT_ATC_TEXT_ENTER,       self.__onHost)
         self.__connect.Bind(wx.EVT_BUTTON,               self.__onConnect)
         self.__project.Bind(wx.EVT_CHOICE,               self.__onProject)
         self.__refresh.Bind(wx.EVT_BUTTON,               self.__onRefresh)
@@ -547,6 +547,183 @@ class XNATBrowserPanel(wx.Panel):
         self.__info.Refresh()
 
 
+    def __getTreeContents(self):
+        """Builds a representation of the current state of the XNAT hierarchy
+        as displayed in the tree browser.
+
+        :returns: The state of the tree, where each node is represented by a
+                  tuple of the form ``(level, id, [children], expanded)``,
+                  where:
+
+                   - ``level`` is the item level in the XNAT hierarchy, e.g.
+                     ``'project'``, ``'subject'``, etc.
+
+                   - ``id`` is the XNAT id of the item
+
+                   - ``[children]`` is a list of child items, or an empty list
+                     if the item has no children
+
+                   - ``expanded`` is ``True`` if the item is expanded in the
+                     tree browser, ``False`` otherwise.
+
+                  A reference to the root node is returned.
+        """
+
+        browser = self.__browser
+
+        # Recursively build a copy of the tree
+        # starting from the given treeItem.
+        # Returns a representation of the item
+        # as a tuple containing:
+        #    ('level', 'id', [children], expanded)
+        def buildTree(treeItem):
+
+            obj, level = browser.GetItemData(treeItem)
+            children   = []
+
+            node = (obj.id, level, children, browser.IsExpanded(treeItem))
+
+            if browser.GetChildrenCount(treeItem) == 0:
+                return node
+
+            (childItem, cookie) = browser.GetFirstChild(treeItem)
+            while childItem.IsOk():
+                children.append(buildTree(childItem))
+                childItem, cookie = browser.GetNextChild(treeItem, cookie)
+
+            return node
+
+        return buildTree(browser.GetRootItem())
+
+
+    def __expandTreeItem(self, obj, level, treeItem):
+        """Expands the contents of the given ``treeItem`` in the tree browser.
+        For each child level of the item's level in the XNAT hierarchy, any
+        child objects are retrieved from the XNAT repository and added as items
+        in the tree browser.
+
+        :arg obj:      XNAT object
+
+        :arg level:    Level of ``obj`` in the XNAT hierarchy
+
+        :arg treeItem: ``wx.TreeItemId`` corresponding to ``obj``
+
+        :returns:      A mapping of the form: ``{ xnat_id : (xnat_obj,
+                       wx.TreeItemId) }``, containing the newly created
+                       ``wx.TreeItemId`` objects orresponding to the
+                       children of ``obj``.
+        """
+
+        childItems = {}
+
+        if level != 'file':
+            self.__browser.SetItemImage(treeItem, self.__loadedFolderImageId)
+
+        for catt in XNAT_HIERARCHY[level]:
+
+            children = getattr(obj, catt, None)
+            catt     = catt[:-1]
+
+            if children is None:
+                continue
+
+            for child in children.listing:
+
+                name  = getattr(child, XNAT_NAME_ATT[catt])
+                label = LABELS[catt]
+
+                if self.__filterItem(catt, name):
+                    continue
+
+                if catt == 'file': image = self.__fileImageId
+                else:              image = self.__unloadedFolderImageId
+
+                childItem = self.__browser.AppendItem(
+                    treeItem,
+                    '{} {}'.format(label, name),
+                    image=image,
+                    data=[child, catt])
+
+                childItems[child.id] = (child, childItem)
+
+        return childItems
+
+
+    def __refreshTree(self):
+        """Called by various things. Re-generates the current state of the
+        tree browser.
+        """
+
+        # Make a copy of the tree state - the tree is stored
+        # as a list of ('level', 'id', [children]) nodes
+        browser  = self.__browser
+        rootNode = self.__getTreeContents()
+        rootItem = browser.GetRootItem()
+        selItem  = browser.GetFocusedItem()
+        rootObj  = browser.GetItemData(rootItem)[0]
+        selObj   = browser.GetItemData(selItem)[ 0]
+
+        # Now clear the tree, and regenerate
+        # it according to its previous state
+        browser.DeleteChildren(rootItem)
+
+        # Recursively add the children of
+        # the given tree item to the tree
+        def refresh(treeItem, treeNode, obj):
+
+            objid, level, childNodes, expanded = treeNode
+
+            if obj is selObj:
+                browser.SetFocusedItem(treeItem)
+
+            if len(childNodes) == 0:
+                return
+
+            childItems = self.__expandTreeItem(obj, level, treeItem)
+
+            # Loop through the nodes of the previous tree
+            # state, and expand any that have been newly
+            # added during this refresh. Some nodes
+            # which were in the tree may not be anymore,
+            # as they may have been filtered out.
+            for cnode in childNodes:
+
+                cid         = cnode[0]
+                cobj, citem = childItems.get(cid, (None, None))
+
+                if citem is not None:
+                    refresh(citem, cnode, cobj)
+
+            if expanded: browser.Expand(  treeItem)
+            else:        browser.Collapse(treeItem)
+
+        refresh(rootItem, rootNode, rootObj)
+
+
+    def __filterItem(self, level, name):
+        """Tests the given ``name`` to see if it should be filtered from the
+        tree browser.
+
+        :arg level: XNAT hierarchy level, e.g. ``'subject'``, ``'experiment'``,
+                    etc.
+
+        :arg name:  Name of item to test.
+
+        :returns:   ``True`` if the given item should be filtered, ``False``
+                    otherwise.
+        """
+
+        pattern = ''
+
+        if   level == 'subject':    pattern = self.__subjFilter.GetValue()
+        elif level == 'experiment': pattern = self.__expFilter .GetValue()
+
+        if pattern.strip() == '':
+            return False
+
+        return re.search(pattern, name, flags=re.IGNORECASE) is None
+
+
     def __onHost(self, ev):
         """Called when the user enters a host name. If the host is
         in the ``knownAccounts`` dictionary that was passed to
@@ -597,9 +774,6 @@ class XNATBrowserPanel(wx.Panel):
         project = self.__project.GetString(self.__project.GetSelection())
         label   = LABELS['project']
 
-        # TODO If project hasn't changed, you should
-        #      re-generate the current tree contents
-
         self.__browser.DeleteAllItems()
 
         # For each element in the tree, the xnat
@@ -616,13 +790,13 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def __onRefresh(self, ev):
-        """Called when the *Refresh* button is pushed. Clears the tree
-        browser, and clears the cache of all items that have been downloaded
-        from the XNAT server.
+        """Called when the *Refresh* button is pushed. Clears the cache of all
+        items that have been downloaded from the XNAT server, and refreshes
+        the tree browser.
         """
         if self.SessionActive():
             self.__session.clearcache()
-            self.__onProject()
+            self.__refreshTree()
 
 
     def __onSubjectFilter(self, ev):
@@ -630,7 +804,7 @@ class XNATBrowserPanel(wx.Panel):
         field. Refreshes the tree browser with the new filter value.
         """
         if self.SessionActive():
-            self.__onProject()
+            self.__refreshTree()
 
 
     def __onExperimentFilter(self, ev):
@@ -638,31 +812,7 @@ class XNATBrowserPanel(wx.Panel):
         field. Refreshes the tree browser with the new filter value.
         """
         if self.SessionActive():
-            self.__onProject()
-
-
-    def __filterItem(self, level, name):
-        """Tests the given ``name`` to see if it should be filtered from the
-        tree browser.
-
-        :arg level: XNAT hierarchy level, e.g. ``'subject'``, ``'experiment'``,
-                    etc.
-
-        :arg name:  Name of item to test.
-
-        :returns:   ``True`` if the given item should be filtered, ``False``
-                    otherwise.
-        """
-
-        pattern = ''
-
-        if   level == 'subject':    pattern = self.__subjFilter.GetValue()
-        elif level == 'experiment': pattern = self.__expFilter .GetValue()
-
-        if pattern.strip() == '':
-            return False
-
-        return re.search(pattern, name, flags=re.IGNORECASE) is None
+            self.__refreshTree()
 
 
     def __onTreeActivate(self, ev=None, item=None):
@@ -689,7 +839,7 @@ class XNATBrowserPanel(wx.Panel):
             wx.PostEvent(self, ev)
             return
 
-        # No children in this folder
+        # This item has already been expanded
         if self.__browser.GetChildrenCount(item) > 0:
             return
 
@@ -704,32 +854,7 @@ class XNATBrowserPanel(wx.Panel):
         #       - Prompt the user to select a range of items
         #         to load
 
-        self.__browser.SetItemImage(item, self.__loadedFolderImageId)
-
-        for catt in XNAT_HIERARCHY[level + 's']:
-
-            children = getattr(obj, catt, None)
-            catt     = catt[:-1]
-
-            if children is None:
-                continue
-
-            for child in children.listing:
-
-                name  = getattr(child, XNAT_NAME_ATT[catt])
-                label = LABELS[catt]
-
-                if self.__filterItem(catt, name):
-                    continue
-
-                if catt == 'file': image = self.__fileImageId
-                else:              image = self.__unloadedFolderImageId
-
-                self.__browser.AppendItem(
-                    item,
-                    '{} {}'.format(label, name),
-                    image=image,
-                    data=[child, catt])
+        self.__expandTreeItem(obj, level, item)
 
 
     def __onTreeSelect(self, ev=None, item=None):
