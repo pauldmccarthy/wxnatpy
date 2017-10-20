@@ -2,7 +2,7 @@ wxnatpy
 =======
 
 
-[![PyPi version](https://img.shields.io/pypi/v/wxnatpy.svg)](https://img.shields.io/pypi/v/wxnatpy.svg)
+[![PyPi version](https://img.shields.io/pypi/v/wxnatpy.svg)](https://pypi.python.org/pypi/wxnatpy/)
 
 
 `wxnatpy` is a [wxPython](https://www.wxpython.org) widget which allows users
