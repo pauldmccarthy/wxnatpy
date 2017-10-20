@@ -156,6 +156,19 @@ LABELS = {
 interface.
 """
 
+TOOLTIPS = {
+    'filter.glob'   :
+    'Items with a label that does not match these shell-style glob patterns '
+    'will be hidden in the browser. You can use the pipe | character to '
+    'specify multiple patterns - items which do not match any pattern will '
+    'be hidden.',
+    'filter.regexp' :
+    'Items with a label that does not match these regular expressions '
+    'will be hidden in the browser.',
+}
+"""This dictionary contains tooltips for various things in the user interface.
+"""
+
 
 XNAT_INFO_FORMATTERS = {
     'resource.file_size' : lambda s: '{:0.2f} MB'.format(float(s) / 1048576),
@@ -199,7 +212,8 @@ class XNATBrowserPanel(wx.Panel):
                  parent,
                  knownHosts=None,
                  knownAccounts=None,
-                 filterType=None):
+                 filterType=None,
+                 filters=None):
         """Create a ``XNATBrowserPanel``.
 
         :arg parent:        ``wx`` parent object.
@@ -216,11 +230,17 @@ class XNATBrowserPanel(wx.Panel):
                             either ``'regexp'`` for regular expressions, or
                             ``'glob'`` for shell-style wildcard patterns.
                             Defaults to ``'regexp'``.
+
+        :arg filters:       Mapping containing initial filter values. Must
+                            be of the form  ``{ level : pattern }``, where
+                            ``level`` is the name of an XNAT hierarchy level
+                            (e.g. ``'subject'``, ``'file'``, etc.).
         """
 
         if knownHosts    is None: knownHosts    = []
         if knownAccounts is None: knownAccounts = {}
         if filterType    is None: filterType    = 'regexp'
+        if filters       is None: filters       = {}
 
         if filterType not in ('regexp', 'glob'):
             raise ValueError('Unrecognised value for filterType: '
@@ -237,6 +257,8 @@ class XNATBrowserPanel(wx.Panel):
             ('experiment', ''),
             ('file',       ''),
         ])
+
+        self.__filters.update(**filters)
 
         self.__host       = at.AutoTextCtrl(self)
         self.__username   = pt.PlaceholderTextCtrl(self,
@@ -305,6 +327,10 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterLabel  .SetLabel(LABELS['filter'])
         self.__refresh      .SetLabel(LABELS['refresh'])
 
+        self.__filterLabel.SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
+        self.__filter     .SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
+        self.__filterText .SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
+
         self.__loginSizer  = wx.BoxSizer(wx.HORIZONTAL)
         self.__filterSizer = wx.BoxSizer(wx.HORIZONTAL)
         self.__mainSizer   = wx.BoxSizer(wx.VERTICAL)
@@ -359,6 +385,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterText.Bind(wx.EVT_TEXT_ENTER,       self.__onFilterText)
 
         self.__endSession()
+        self.__updateFilter()
 
 
     def GetSelectedFiles(self):
@@ -729,6 +756,27 @@ class XNATBrowserPanel(wx.Panel):
         return selected
 
 
+    def __updateFilter(self, filterName=None):
+        """Makes sure that the labels in the *Filter* drop down box are up to
+        date. When a filter is active, the corresponding label is highlighted.
+        """
+
+        allFilters = list(self.__filters.keys())
+
+        if filterName is None: filterName = allFilters
+        else:                  filterName = [filterName]
+
+        for f in filterName:
+            idx     = allFilters.index(f)
+            label   = self.__filter.GetString(idx)
+            pattern = self.__filters[f]
+
+            if pattern == '': label = label.strip('*')
+            else:             label = label + '*'
+
+            self.__filter.SetString(idx, label)
+
+
     def __filterItem(self, level, name):
         """Tests the given ``name`` to see if it should be filtered from the
         tree browser.
@@ -753,7 +801,14 @@ class XNATBrowserPanel(wx.Panel):
         if self.__filterType == 'regexp':
             return re.search(pattern, name, flags=re.IGNORECASE) is None
         elif self.__filterType == 'glob':
-            return not fnmatch.fnmatch(name, pattern)
+
+            # The user can specify multiple glob
+            # patterns with the pipe operator -
+            # this acts as a logical OR: the
+            # item will only be filtered if it
+            # doesn't match any of the patterns.
+            matches = [fnmatch.fnmatch(name, p) for p in pattern.split('|')]
+            return not any(matches)
         else:
             return False
 
@@ -852,14 +907,7 @@ class XNATBrowserPanel(wx.Panel):
         filterVal = self.__filterText.GetValue().strip()
 
         self.__filters[selected] = filterVal
-
-        selected = self.__filter.GetSelection()
-        label    = self.__filter.GetString(selected)
-
-        if filterVal == '': label = label.strip('*')
-        else:               label = label + '*'
-
-        self.__filter.SetString(selected, label)
+        self.__updateFilter(selected)
 
         if self.SessionActive():
             self.__refreshTree()
