@@ -18,6 +18,7 @@ and *Download* and *Cancel* buttons.
 import os.path         as op
 import                    re
 import                    fnmatch
+import                    collections
 
 import                    wx
 import wx.lib.newevent as wxevent
@@ -87,11 +88,9 @@ LABELS = {
     'connecting'   : 'Connecting to {} ...',
     'project'      : 'Project',
     'refresh'      : 'Refresh',
+    'filter'       : 'Filter by',
     'connected'    : u'\u2022',
     'disconnected' : u'\u2022',
-
-    'subjFilter' : 'Filter by subject',
-    'expFilter'  : 'by experiment',
 
     'connect.error.title'   : 'Connection error',
     'connect.error.message' :
@@ -115,7 +114,6 @@ LABELS = {
     'download.error.title'   : 'Download error',
     'download.error.message' :
     'An error occurred while trying to download {}',
-
 
 
     'projects'    : 'Projects',
@@ -227,6 +225,12 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__knownAccounts = dict(knownAccounts)
         self.__filterType    = filterType
+        self.__session       = None
+        self.__filters = collections.OrderedDict([
+            ('subject',    ''),
+            ('experiment', ''),
+            ('file',       ''),
+        ])
 
         self.__host       = at.AutoTextCtrl(self)
         self.__username   = pt.PlaceholderTextCtrl(self,
@@ -238,11 +242,9 @@ class XNATBrowserPanel(wx.Panel):
         self.__status     = wx.StaticText(self)
         self.__project    = wx.Choice(self)
         self.__refresh    = wx.Button(self)
+        self.__filter     = wx.Choice(self)
 
-        self.__subjFilter = pt.PlaceholderTextCtrl(self,
-                                                   placeholder=filterType,
-                                                   style=wx.TE_PROCESS_ENTER)
-        self.__expFilter  = pt.PlaceholderTextCtrl(self,
+        self.__filterText = pt.PlaceholderTextCtrl(self,
                                                    placeholder=filterType,
                                                    style=wx.TE_PROCESS_ENTER)
         self.__splitter   = wx.SplitterWindow(self,
@@ -279,24 +281,24 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__browser.AssignImageList(imageList)
 
-        self.__hostLabel       = wx.StaticText(self)
-        self.__usernameLabel   = wx.StaticText(self)
-        self.__passwordLabel   = wx.StaticText(self)
-        self.__projectLabel    = wx.StaticText(self)
-        self.__subjFilterLabel = wx.StaticText(self)
-        self.__expFilterLabel  = wx.StaticText(self)
+        self.__filter.SetItems([LABELS[f] for f in self.__filters.keys()])
+
+        self.__hostLabel     = wx.StaticText(self)
+        self.__usernameLabel = wx.StaticText(self)
+        self.__passwordLabel = wx.StaticText(self)
+        self.__projectLabel  = wx.StaticText(self)
+        self.__filterLabel   = wx.StaticText(self)
 
         self.__status.SetFont(self.__status.GetFont().Larger().Larger())
         self.__info.SetColours(border=self.__info._defaultEvenColour)
-        self.__host           .AutoComplete(knownHosts)
-        self.__hostLabel      .SetLabel(LABELS['host'])
-        self.__usernameLabel  .SetLabel(LABELS['username'])
-        self.__passwordLabel  .SetLabel(LABELS['password'])
-        self.__connect        .SetLabel(LABELS['connect'])
-        self.__projectLabel   .SetLabel(LABELS['project'])
-        self.__subjFilterLabel.SetLabel(LABELS['subjFilter'])
-        self.__expFilterLabel .SetLabel(LABELS['expFilter'])
-        self.__refresh        .SetLabel(LABELS['refresh'])
+        self.__host         .AutoComplete(knownHosts)
+        self.__hostLabel    .SetLabel(LABELS['host'])
+        self.__usernameLabel.SetLabel(LABELS['username'])
+        self.__passwordLabel.SetLabel(LABELS['password'])
+        self.__connect      .SetLabel(LABELS['connect'])
+        self.__projectLabel .SetLabel(LABELS['project'])
+        self.__filterLabel  .SetLabel(LABELS['filter'])
+        self.__refresh      .SetLabel(LABELS['refresh'])
 
         self.__loginSizer  = wx.BoxSizer(wx.HORIZONTAL)
         self.__filterSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -325,13 +327,11 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterSizer.Add((5, 1))
         self.__filterSizer.Add(self.__project, proportion=1)
         self.__filterSizer.Add((5, 1))
-        self.__filterSizer.Add(self.__subjFilterLabel)
+        self.__filterSizer.Add(self.__filterLabel)
         self.__filterSizer.Add((5, 1))
-        self.__filterSizer.Add(self.__subjFilter, proportion=1)
+        self.__filterSizer.Add(self.__filter)
         self.__filterSizer.Add((5, 1))
-        self.__filterSizer.Add(self.__expFilterLabel)
-        self.__filterSizer.Add((5, 1))
-        self.__filterSizer.Add(self.__expFilter, proportion=1)
+        self.__filterSizer.Add(self.__filterText, proportion=1)
         self.__filterSizer.Add((5, 1))
         self.__filterSizer.Add(self.__refresh)
         self.__filterSizer.Add((5, 1))
@@ -344,17 +344,15 @@ class XNATBrowserPanel(wx.Panel):
 
         self.SetSizer(self.__mainSizer)
 
-        self.__host   .Bind(at.EVT_ATC_TEXT_ENTER,       self.__onHost)
-        self.__connect.Bind(wx.EVT_BUTTON,               self.__onConnect)
-        self.__project.Bind(wx.EVT_CHOICE,               self.__onProject)
-        self.__refresh.Bind(wx.EVT_BUTTON,               self.__onRefresh)
-        self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED,  self.__onTreeActivate)
-        self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,     self.__onTreeSelect)
+        self.__host   .Bind(at.EVT_ATC_TEXT_ENTER,      self.__onHost)
+        self.__connect.Bind(wx.EVT_BUTTON,              self.__onConnect)
+        self.__project.Bind(wx.EVT_CHOICE,              self.__onProject)
+        self.__refresh.Bind(wx.EVT_BUTTON,              self.__onRefresh)
+        self.__filter .Bind(wx.EVT_CHOICE,              self.__onFilter)
+        self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.__onTreeActivate)
+        self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
+        self.__filterText.Bind(wx.EVT_TEXT_ENTER,       self.__onFilterText)
 
-        self.__subjFilter.Bind(wx.EVT_TEXT_ENTER, self.__onSubjectFilter)
-        self.__expFilter .Bind(wx.EVT_TEXT_ENTER, self.__onExperimentFilter)
-
-        self.__session = None
         self.__endSession()
 
 
@@ -717,6 +715,15 @@ class XNATBrowserPanel(wx.Panel):
         refresh(rootItem, rootNode, rootObj)
 
 
+    def __getSelectedFilter(self):
+        """Returns the XNAT level corresponding to the currently selected
+        filter.
+        """
+        selected = self.__filter.GetSelection()
+        selected = list(self.__filters.keys())[selected]
+        return selected
+
+
     def __filterItem(self, level, name):
         """Tests the given ``name`` to see if it should be filtered from the
         tree browser.
@@ -730,13 +737,13 @@ class XNATBrowserPanel(wx.Panel):
                     otherwise.
         """
 
-        pattern = ''
-
-        if   level == 'subject':    pattern = self.__subjFilter.GetValue()
-        elif level == 'experiment': pattern = self.__expFilter .GetValue()
+        pattern = self.__filters.get(level, '')
 
         if pattern.strip() == '':
             return False
+
+        pattern = pattern.lower()
+        name    = name.lower()
 
         if self.__filterType == 'regexp':
             return re.search(pattern, name, flags=re.IGNORECASE) is None
@@ -821,18 +828,34 @@ class XNATBrowserPanel(wx.Panel):
             self.__refreshTree()
 
 
-    def __onSubjectFilter(self, ev):
-        """Called when the user pushes the enter key in the subject filter
-        field. Refreshes the tree browser with the new filter value.
+    def __onFilter(self, ev):
+        """Called when the user changes the currently selected filter. Updates
+        the filter text.
         """
-        if self.SessionActive():
-            self.__refreshTree()
+
+        selected = self.__getSelectedFilter()
+        newText  = self.__filters[selected]
+
+        self.__filterText.SetValue(newText)
 
 
-    def __onExperimentFilter(self, ev):
-        """Called when the user pushes the enter key in the experiment filter
+    def __onFilterText(self, ev):
+        """Called when the user pushes the enter key in the filter
         field. Refreshes the tree browser with the new filter value.
         """
+        selected  = self.__getSelectedFilter()
+        filterVal = self.__filterText.GetValue().strip()
+
+        self.__filters[selected] = filterVal
+
+        selected = self.__filter.GetSelection()
+        label    = self.__filter.GetString(selected)
+
+        if filterVal == '': label = label.strip('*')
+        else:               label = label + '*'
+
+        self.__filter.SetString(selected, label)
+
         if self.SessionActive():
             self.__refreshTree()
 
