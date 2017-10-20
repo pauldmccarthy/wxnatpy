@@ -203,8 +203,11 @@ class XNATBrowserPanel(wx.Panel):
     .. autosummary::
        :nosignatures:
 
+       SessionActive
        GetSelectedFiles
        DownloadFile
+       GetHosts
+       GetAccounts
     """
 
 
@@ -247,9 +250,18 @@ class XNATBrowserPanel(wx.Panel):
                              '{}. May be one of \'regexp\' or '
                              '\'glob\''.format(filterType))
 
+        # store hosts without
+        # the http[s]:// prefix
+        knownHosts    = [h.strip('https://')          for h in knownHosts]
+        knownAccounts = {h.strip('https://') : (u, p) for h, (u, p)
+                         in knownAccounts.items()}
+        knownHosts   += [h for h in knownAccounts.keys()
+                         if h not in knownHosts]
+
         wx.Panel.__init__(self, parent)
 
-        self.__knownAccounts = dict(knownAccounts)
+        self.__knownHosts    = knownHosts
+        self.__knownAccounts = knownAccounts
         self.__filterType    = filterType
         self.__session       = None
         self.__filters = collections.OrderedDict([
@@ -509,6 +521,25 @@ class XNATBrowserPanel(wx.Panel):
         return self.__session is not None
 
 
+    def GetHosts(self):
+        """Returns a list of host names that were either:
+
+          - passed to :meth:`__init__`
+          - entered by the user, and successfully connected to
+        """
+        return self.__knownHosts
+
+
+    def GetAccounts(self):
+        """Returns a mapping of the form ``{ host : (username, password) }``
+        containing XNAT accounts that were either:
+
+          - passed to :meth:`__init__`
+          - entered by the user, and successfully connected to
+        """
+        return self.__knownAccounts
+
+
     def __startSession(self, host, username=None, password=None):
         """Opens a connection  to the given host, and updates the interface.
 
@@ -532,6 +563,14 @@ class XNATBrowserPanel(wx.Panel):
             self.__connect.SetLabel(LABELS['disconnect'])
             self.__status.SetLabel(LABELS['connected'])
             self.__status.SetForegroundColour('#00ff00')
+
+            # Add every successful connection
+            # to the known hosts/accounts store
+            host = host.strip('https://')
+            if host not in self.__knownHosts:
+                self.__knownHosts.append(host)
+            if host not in self.__knownAccounts:
+                self.__knownAccounts[host] = (username, password)
 
         def failure(error):
             status.reportError(
