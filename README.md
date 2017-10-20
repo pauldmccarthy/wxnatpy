@@ -29,6 +29,21 @@ when installing via `pip`. Under Linux, you will also need to have the
 `wxpython` compile-time dependencies available in order to install `wxpython`.
 
 
+## Usage
+
+
+The `wxnat.XNATBrowserPanel` is a `wx.Panel`, which is intended to be embedded
+in a `wxpython` application. The `wxnat` package can also be called as a
+standalone application, e.g.:
+
+```sh
+python -m wxnat
+```
+
+This will open a dialog containing the browser panel, and *Download* and
+*Close* buttons.
+
+
 ## Acknowledgements
 
 
