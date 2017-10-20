@@ -262,8 +262,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__splitter.SetSashPosition(50)
         self.__splitter.SetSashGravity(0.2)
 
-        imagedir = op.join(op.dirname(__file__), '..', 'assets')
-
+        imagedir = op.join(op.dirname(__file__), 'assets')
         images   = [op.join(imagedir, 'file.png'),
                     op.join(imagedir, 'folder_unloaded.png'),
                     op.join(imagedir, 'folder_loaded.png')]
