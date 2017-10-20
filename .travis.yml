@@ -6,15 +6,17 @@ python:
 services:
   - docker
 
-env:
-  global:
-    - TWINE_USERNAME=pauldmccarthy
-    - secure: "tc7qlO6QZkQSBHur0gPDyd+CxK3Km36WMXz7Hbe8BJTu0aucJm3WN5fy2aq6dty9V3wIxdjCArw7XDmsOf9Oy/coHl/uD/AFN7sdxlU8+fcqwY0h5wB4xlSrXQy5QEbzCCHbL+REHUnzEsellv4vJhS7EgeUeid1wq74JjLKv1ys1xxqawNkTY1G9TVelPIhUfuwrxzLsXwhZTdNCtG6Ba1C5wVxiELCnC8oS7VuX0R7EhUZ1knt3UwTitFfdSG/4gdlTr7gfc47zXMN3ViJmHJCp2hWx3zchiuhT68szGTcFYpSuZLVgKOQghtKiVK4tvn7zUmHRozMY6lRObXfZzVK+bRKdELOYahvsv1OcHpJ7LQ3XUv4kBeh4H8FXPANOXw1PHMhsxVJluQPxI6JNrZj/n/OG9WzS6p8RII6tQjyeeXLk/gZfGZ3kZNqltYjH4fw76JGrmeSUHdM/4AVs46GsyIyLh0w/0ENxDeMJ3P3e7jfD2ybNP/Dv/mrIwQNFyZ12aiXGXDLjENbPfziX6AtTwTvAHivBJ1zryO+uOD2AjjS4CP9SBeOtJHaO6VUYYQAUVn2txjJb1kgC/unzcnNOaegVWumfRKgfChuTT7mmjEJYbMyvMpbjovCytVU/uXBxoJLlC4UM9dfmIvpv3/XVUCVD7zaMUtyI7RnBvU="
+deploy:
+  provider: pypi
+  username: pauldmccarthy
+  password:
+    secure: "QJGbB1YehsWaa/NpaNd6xfxsGr6QvpxuGBe7KpQytsX/tRLkXA1oaYjEZ5A/+0yIn+MbLWlfZ8SaPhx3uP/kMsZ4vO6xexRTt8bZ23gN8wlxoznh1wpG0dNUmVQbkp+LNGRSaQstrc8EiStWc2JQSoHzDaWL59AhPn7M/1QrrxU6Blrzxm7Q/cKaj8QmL9xd0XxeHH7js6AH94LJf+PvTnooBJO3VurhJ8qz11WCLjH46KK+s3ySJgua4IjFU9QjHozfo0Jp0/jZ3dUVh2fRHqFNIOlkUaCcst/n135dMV7r/l6SISe+USdLdjKC7hkmrB3bPSvQ833LKc8tSRhygKC/IEuO6NcukeD3LnPF37Wz/zunmoVp7vaJGm5iUkAO+Y+oGD6LxVUXsWF8Z6e+BIV+mO0I2FLQ9R5AMtoGe5Fs/wMiAlNAjFBeFkQToy6u2702K8HcFRHwcqSsIq60QH+rW/yzxGYS9Bje65ktvNR/FoidCdi0I26bC2FZ/8BkcqYxfo6oZC0/EC/I/q8dH8g/E5/ydNkoKKMv0zVtjInREYZ9mtU2lbls7XdmEj1muGtE2a3/QG2etwBeNy1fzpB1ha7g2W+RjeazW+viintd7TtzzGWQsFJOCtzLkxhcYDqJd8at21+S9F/zmo3/Nvi1S48oydhy59NYGagD0T8="
+  on:
+    tags: true
 
+install:
+  - echo "Overriding travis";
 
 script:
   - if [ -z "$TRAVIS_TAG" ]; then exit 0; fi
   - if [ `python setup.py -V` != "$TRAVIS_TAG"]; then echo "Error - tag does not match version"; exit 1; fi
-  - pip install twine
-  - python setup.py sdist
-  - twine upload dist/*
