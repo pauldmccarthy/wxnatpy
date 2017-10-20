@@ -203,6 +203,8 @@ class XNATBrowserPanel(wx.Panel):
     .. autosummary::
        :nosignatures:
 
+       StartSession
+       EndSession
        SessionActive
        GetSelectedFiles
        DownloadFile
@@ -396,8 +398,8 @@ class XNATBrowserPanel(wx.Panel):
         self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
         self.__filterText.Bind(wx.EVT_TEXT_ENTER,       self.__onFilterText)
 
-        self.__endSession()
         self.__updateFilter()
+        self.EndSession()
 
 
     def GetSelectedFiles(self):
@@ -540,15 +542,25 @@ class XNATBrowserPanel(wx.Panel):
         return self.__knownAccounts
 
 
-    def __startSession(self, host, username=None, password=None):
+    def StartSession(self,
+                     host,
+                     username=None,
+                     password=None,
+                     showError=True):
         """Opens a connection  to the given host, and updates the interface.
+
+        :arg host:      XNAT host to connect to
+        :arg username:  Username
+        :arg password:  Password
+        :arg showError: If ``True`` (the default), and the connection fails,
+                        an error message will be shown.
 
         :returns: ``True`` if the connection was successful, ``False``
                   otherwise.
         """
 
         if self.SessionActive():
-            self.__endSession()
+            self.EndSession()
 
         # If protocol not specified,
         # try both https and http
@@ -573,10 +585,11 @@ class XNATBrowserPanel(wx.Panel):
                 self.__knownAccounts[host] = (username, password)
 
         def failure(error):
-            status.reportError(
-                LABELS['connect.error.title'],
-                LABELS['connect.error.message'].format(host),
-                error)
+            if showError:
+                status.reportError(
+                    LABELS['connect.error.title'],
+                    LABELS['connect.error.message'].format(host),
+                    error)
 
         cancelled = [False]
 
@@ -611,7 +624,7 @@ class XNATBrowserPanel(wx.Panel):
         return not cancelled[0] and self.__session is not None
 
 
-    def __endSession(self):
+    def EndSession(self):
         """Disconnects any active session, and updates the interface."""
 
         if self.__session is not None:
@@ -873,7 +886,7 @@ class XNATBrowserPanel(wx.Panel):
         """
 
         if self.SessionActive():
-            self.__endSession()
+            self.EndSession()
             return
 
         host     = self.__host    .GetValue()
@@ -883,7 +896,7 @@ class XNATBrowserPanel(wx.Panel):
         if username == '': username = None
         if password == '': password = None
 
-        if not self.__startSession(host, username, password):
+        if not self.StartSession(host, username, password):
             return
 
         projects = self.__session.projects
