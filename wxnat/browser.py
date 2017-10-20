@@ -1111,9 +1111,9 @@ class XNATBrowserDialog(wx.Dialog):
         self.__sizer    = wx.BoxSizer(wx.VERTICAL)
 
         self.__btnSizer.Add((10, 1),         flag=wx.EXPAND, proportion=1)
-        self.__btnSizer.Add(self.__close,    flag=wx.EXPAND)
-        self.__btnSizer.Add((10, 1),         flag=wx.EXPAND)
         self.__btnSizer.Add(self.__download, flag=wx.EXPAND)
+        self.__btnSizer.Add((10, 1),         flag=wx.EXPAND)
+        self.__btnSizer.Add(self.__close,    flag=wx.EXPAND)
         self.__btnSizer.Add((10, 1),         flag=wx.EXPAND)
 
         self.__sizer.Add((1, 10),         flag=wx.EXPAND)
