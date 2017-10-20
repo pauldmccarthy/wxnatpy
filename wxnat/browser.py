@@ -1157,10 +1157,4 @@ class XNATBrowserDialog(wx.Dialog):
         if self.IsModal(): self.EndModal(wx.ID_CLOSE)
         else:              self.Close()
 
-
-if __name__ == '__main__':
-    app = wx.App()
-    dlg = XNATBrowserDialog(None)
-    dlg.SetSize((-1, 500))
-    dlg.Show()
-    app.MainLoop()
+        wx.CallAfter(self.Destroy)
