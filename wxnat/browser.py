@@ -18,6 +18,7 @@ and *Download* and *Cancel* buttons.
 import os.path         as op
 import                    re
 import                    fnmatch
+import                    logging
 import                    collections
 
 import                    wx
@@ -30,6 +31,9 @@ import fsleyes_widgets.autotextctrl         as at
 import fsleyes_widgets.utils.status         as status
 import fsleyes_widgets.utils.progress       as progress
 import fsleyes_widgets.widgetgrid           as wgrid
+
+
+log = logging.getLogger(__name__)
 
 
 XNAT_HIERARCHY = {
@@ -56,6 +60,7 @@ XNAT_NAME_ATT = {
     'project'    : 'name',
     'subject'    : 'label',
     'experiment' : 'label',
+    'assessor'   : 'label',
     'scan'       : 'type',
     'resource'   : 'label',
     'file'       : 'id',
@@ -138,6 +143,7 @@ LABELS = {
     'subject.label'      : 'Label',
     'experiment.id'      : 'ID',
     'experiment.label'   : 'Label',
+    'assessor.id'        : 'ID',
     'scan.id'            : 'ID',
     'scan.type'          : 'Type',
     'resource.id'        : 'ID',
@@ -546,8 +552,8 @@ class XNATBrowserPanel(wx.Panel):
             try:
                 self.__session.disconnect()
             except Exception:
-                # TODO log
-                pass
+                log.warning('Error occurred during session disconnection',
+                            exc_info=True)
             self.__session = None
 
         self.__connect.SetLabel(LABELS['connect'])
@@ -918,14 +924,19 @@ class XNATBrowserPanel(wx.Panel):
 
         for att in XNAT_INFO_ATTS[level]:
             key = '{}.{}'.format(level, att)
-            val = getattr(obj, att)
             fmt = XNAT_INFO_FORMATTERS.get(key, str)
-            rows.append((LABELS[key], fmt(val)))
+            val = getattr(obj, att, None)
+
+            if val is not None:
+                rows.append((LABELS[key], fmt(val)))
+            else:
+                log.warning('{}.{} attribute is missing on '
+                            '{}'.format(level, att, obj))
 
         if level in XNAT_HIERARCHY:
             for catt in XNAT_HIERARCHY[level]:
 
-                nchildren = str(len(getattr(obj, catt)))
+                nchildren = str(len(getattr(obj, catt, [])))
                 catt      = LABELS[catt]
 
                 rows.append((catt, nchildren))
