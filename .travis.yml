@@ -16,4 +16,4 @@ deploy:
 
 script:
   - if [ -z "$TRAVIS_TAG" ]; then exit 0; fi
-  - if [ `python setup.py -V` != "$TRAVIS_TAG"]; then echo "Error: tag does not match version!"; exit 1; fi
+  - if [ `python setup.py -V` != "$TRAVIS_TAG"]; then echo "Error - tag does not match version"; exit 1; fi
