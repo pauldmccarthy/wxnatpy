@@ -17,6 +17,7 @@ and *Download* and *Cancel* buttons.
 
 import os.path         as op
 import                    re
+import                    fnmatch
 
 import                    wx
 import wx.lib.newevent as wxevent
@@ -193,7 +194,8 @@ class XNATBrowserPanel(wx.Panel):
     def __init__(self,
                  parent,
                  knownHosts=None,
-                 knownAccounts=None):
+                 knownAccounts=None,
+                 filterType=None):
         """Create a ``XNATBrowserPanel``.
 
         :arg parent:        ``wx`` parent object.
@@ -205,14 +207,26 @@ class XNATBrowserPanel(wx.Panel):
                             which are used to automatically fill in the
                             login credentials when a particular host name
                             is entered.
+
+        :arg filterType:    How the filter patterns should be applied -
+                            either ``'regexp'`` for regular expressions, or
+                            ``'glob'`` for shell-style wildcard patterns.
+                            Defaults to ``'regexp'``.
         """
 
         if knownHosts    is None: knownHosts    = []
         if knownAccounts is None: knownAccounts = {}
+        if filterType    is None: filterType    = 'regexp'
+
+        if filterType not in ('regexp', 'glob'):
+            raise ValueError('Unrecognised value for filterType: '
+                             '{}. May be one of \'regexp\' or '
+                             '\'glob\''.format(filterType))
 
         wx.Panel.__init__(self, parent)
 
         self.__knownAccounts = dict(knownAccounts)
+        self.__filterType    = filterType
 
         self.__host       = at.AutoTextCtrl(self)
         self.__username   = pt.PlaceholderTextCtrl(self,
@@ -224,11 +238,12 @@ class XNATBrowserPanel(wx.Panel):
         self.__status     = wx.StaticText(self)
         self.__project    = wx.Choice(self)
         self.__refresh    = wx.Button(self)
+
         self.__subjFilter = pt.PlaceholderTextCtrl(self,
-                                                   placeholder='regexp',
+                                                   placeholder=filterType,
                                                    style=wx.TE_PROCESS_ENTER)
         self.__expFilter  = pt.PlaceholderTextCtrl(self,
-                                                   placeholder='regexp',
+                                                   placeholder=filterType,
                                                    style=wx.TE_PROCESS_ENTER)
         self.__splitter   = wx.SplitterWindow(self,
                                               style=(wx.SP_LIVE_UPDATE |
@@ -661,7 +676,9 @@ class XNATBrowserPanel(wx.Panel):
         rootItem = browser.GetRootItem()
         selItem  = browser.GetFocusedItem()
         rootObj  = browser.GetItemData(rootItem)[0]
-        selObj   = browser.GetItemData(selItem)[ 0]
+
+        if selItem.IsOk(): selObj = browser.GetItemData(selItem)[0]
+        else:              selObj = None
 
         # Now clear the tree, and regenerate
         # it according to its previous state
@@ -721,7 +738,12 @@ class XNATBrowserPanel(wx.Panel):
         if pattern.strip() == '':
             return False
 
-        return re.search(pattern, name, flags=re.IGNORECASE) is None
+        if self.__filterType == 'regexp':
+            return re.search(pattern, name, flags=re.IGNORECASE) is None
+        elif self.__filterType == 'glob':
+            return not fnmatch.fnmatch(name, pattern)
+        else:
+            return False
 
 
     def __onHost(self, ev):
