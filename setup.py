@@ -52,5 +52,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules'],
 
     packages=['wxnat'],
+    include_package_data=True,
     install_requires=install_requires,
 )
