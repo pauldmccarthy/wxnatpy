@@ -32,6 +32,8 @@ import fsleyes_widgets.utils.status         as status
 import fsleyes_widgets.utils.progress       as progress
 import fsleyes_widgets.widgetgrid           as wgrid
 
+import wxnat.icons as icons
+
 
 log = logging.getLogger(__name__)
 
@@ -304,11 +306,9 @@ class XNATBrowserPanel(wx.Panel):
         self.__splitter.SetSashPosition(50)
         self.__splitter.SetSashGravity(0.2)
 
-        imagedir = op.join(op.dirname(__file__), 'assets')
-        images   = [op.join(imagedir, 'file.png'),
-                    op.join(imagedir, 'folder_unloaded.png'),
-                    op.join(imagedir, 'folder_loaded.png')]
-        images   = [wx.Bitmap(i) for i in images]
+        images = [icons.loadBitmap(icons.FILE_ICON),
+                  icons.loadBitmap(icons.FOLDER_UNLOADED_ICON),
+                  icons.loadBitmap(icons.FOLDER_LOADED_ICON)]
 
         self.__fileImageId           = 0
         self.__unloadedFolderImageId = 1
