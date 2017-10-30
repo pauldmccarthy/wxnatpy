@@ -511,7 +511,7 @@ class XNATBrowserPanel(wx.Panel):
                 dlg.Fit()
 
                 if finished:
-                    dlg.EndModal(wx.ID_OK)
+                    dlg.Close()
 
             dlg.Show()
 
