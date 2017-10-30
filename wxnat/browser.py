@@ -918,6 +918,7 @@ class XNATBrowserPanel(wx.Panel):
         projects = [p.id for p in projects.listing]
 
         self.__project.SetItems(projects)
+        self.__project.SetSelection(0)
         self.__onProject()
 
 
@@ -927,7 +928,12 @@ class XNATBrowserPanel(wx.Panel):
         selected project.
         """
 
-        project = self.__project.GetString(self.__project.GetSelection())
+        project = self.__project.GetSelection()
+
+        if project == wx.NOT_FOUND:
+            return
+
+        project = self.__project.GetString(project).strip()
         label   = LABELS['project']
 
         self.__browser.DeleteAllItems()
