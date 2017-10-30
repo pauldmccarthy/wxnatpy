@@ -1108,7 +1108,7 @@ class XNATBrowserDialog(wx.Dialog):
 
         self.__panel    = XNATBrowserPanel(self, *args, **kwargs)
         self.__download = wx.Button(self)
-        self.__close    = wx.Button(self, id=wx.ID_CLOSE)
+        self.__close    = wx.Button(self, id=wx.ID_CANCEL)
 
         self.__download.SetLabel('Download')
         self.__close   .SetLabel('Close')
