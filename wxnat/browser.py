@@ -341,9 +341,11 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterLabel  .SetLabel(LABELS['filter'])
         self.__refresh      .SetLabel(LABELS['refresh'])
 
-        self.__filterLabel.SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
-        self.__filter     .SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
-        self.__filterText .SetToolTip(TOOLTIPS['filter.{}'.format(filterType)])
+        filterTooltip = wx.ToolTip(TOOLTIPS['filter.{}'.format(filterType)])
+
+        self.__filterLabel.SetToolTip(filterTooltip)
+        self.__filter     .SetToolTip(filterTooltip)
+        self.__filterText .SetToolTip(filterTooltip)
 
         self.__loginSizer  = wx.BoxSizer(wx.HORIZONTAL)
         self.__filterSizer = wx.BoxSizer(wx.HORIZONTAL)
