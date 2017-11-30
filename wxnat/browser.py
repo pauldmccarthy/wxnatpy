@@ -26,6 +26,7 @@ import wx.lib.newevent as wxevent
 
 import xnat
 
+import fsleyes_widgets                      as fw
 import fsleyes_widgets.placeholder_textctrl as pt
 import fsleyes_widgets.autotextctrl         as at
 import fsleyes_widgets.utils.status         as status
@@ -179,6 +180,15 @@ XNAT_INFO_FORMATTERS = {
 """This dictionary contains string formatters for some attributes that are
 shown in the information panel.
 """
+
+def getTreeData(tree, item):
+    """Returns the data in the given ``wx.TreeCtrl`` associated with the
+    given ``item``. This is done differently depending on whether wxPython
+    or wxPhoenix is used.
+    """
+    data = tree.GetItemData(item)
+    if fw.wxversion() == fw.WX_PHOENIX: return data
+    else:                               return data.GetData()
 
 
 class XNATBrowserPanel(wx.Panel):
@@ -413,7 +423,7 @@ class XNATBrowserPanel(wx.Panel):
 
         for i in items:
 
-            obj, level = self.__browser.GetItemData(i)
+            obj, level = getTreeData(self.__browser, i)
 
             if level == 'file':
                 files.append(obj)
@@ -692,7 +702,7 @@ class XNATBrowserPanel(wx.Panel):
         #    ('level', 'id', [children], expanded)
         def buildTree(treeItem):
 
-            obj, level = browser.GetItemData(treeItem)
+            obj, level = getTreeData(browser, treeItem)
             children   = []
 
             node = (obj.id, level, children, browser.IsExpanded(treeItem))
@@ -752,11 +762,16 @@ class XNATBrowserPanel(wx.Panel):
                 if catt == 'file': image = self.__fileImageId
                 else:              image = self.__unloadedFolderImageId
 
+                data = [child, catt]
+
+                if fw.wxversion() == fw.WX_PYTHON:
+                    data = wx.TreeItemData(data)
+
                 childItem = self.__browser.AppendItem(
                     treeItem,
                     '{} {}'.format(label, name),
                     image=image,
-                    data=[child, catt])
+                    data=data)
 
                 childItems[child.id] = (child, childItem)
 
@@ -774,9 +789,9 @@ class XNATBrowserPanel(wx.Panel):
         rootNode = self.__getTreeContents()
         rootItem = browser.GetRootItem()
         selItem  = browser.GetFocusedItem()
-        rootObj  = browser.GetItemData(rootItem)[0]
+        rootObj  = getTreeData(browser, rootItem)[0]
 
-        if selItem.IsOk(): selObj = browser.GetItemData(selItem)[0]
+        if selItem.IsOk(): selObj = getTreeData(browser, selItem)[0]
         else:              selObj = None
 
         # Now clear the tree, and regenerate
@@ -868,7 +883,10 @@ class XNATBrowserPanel(wx.Panel):
         name    = name.lower()
 
         if self.__filterType == 'regexp':
-            return re.search(pattern, name, flags=re.IGNORECASE) is None
+            try:
+                return re.search(pattern, name, flags=re.IGNORECASE) is None
+            except Exception:
+                return False
         elif self.__filterType == 'glob':
 
             # The user can specify multiple glob
@@ -945,9 +963,14 @@ class XNATBrowserPanel(wx.Panel):
         # the XNAT hierarchy (e.g 'project',
         # 'experiment') is stored by the tree
         # browser.
-        root  = self.__browser.AddRoot(
+        data = [self.__session.projects[project], 'project']
+
+        if fw.wxversion() == fw.WX_PYTHON:
+            data = wx.TreeItemData(data)
+
+        root = self.__browser.AddRoot(
             '{} {}'.format(label, project),
-            data=[self.__session.projects[project], 'project'],
+            data=data,
             image=self.__unloadedFolderImageId)
 
         self.__onTreeSelect(item=root)
@@ -1002,7 +1025,7 @@ class XNATBrowserPanel(wx.Panel):
 
         # Retrieve the XNAT object and its level
         # in the hierarchy from the tree browser.
-        obj, level = self.__browser.GetItemData(item)
+        obj, level = getTreeData(self.__browser, item)
 
         # When a file gets activated,
         # post a file select event
@@ -1039,9 +1062,8 @@ class XNATBrowserPanel(wx.Panel):
             ev.Skip()
             item = ev.GetItem()
 
-        obj, level = self.__browser.GetItemData(item)
-
-        rows = [
+        obj, level = getTreeData(self.__browser, item)
+        rows       = [
             ('Type', LABELS[level]),
         ]
 
