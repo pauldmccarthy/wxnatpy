@@ -573,7 +573,8 @@ class XNATBrowserPanel(wx.Panel):
                      host,
                      username=None,
                      password=None,
-                     showError=True):
+                     showError=True,
+                     callback=None):
         """Opens a connection  to the given host, and updates the interface.
 
         :arg host:      XNAT host to connect to
@@ -581,10 +582,17 @@ class XNATBrowserPanel(wx.Panel):
         :arg password:  Password
         :arg showError: If ``True`` (the default), and the connection fails,
                         an error message will be shown.
-
-        :returns: ``True`` if the connection was successful, ``False``
-                  otherwise.
+        :arg callback:  Function which will be called when the connection has
+                        been made. The function is passed a single boolean
+                        parameter, indicating whether or not the conncetion
+                        was a success.
         """
+
+        def defaultCallback(success):
+            pass
+
+        if callback is None:
+            callback = defaultCallback
 
         if self.SessionActive():
             self.EndSession()
@@ -596,8 +604,45 @@ class XNATBrowserPanel(wx.Panel):
         else:
             hosts = ['https://' + host, 'http://' + host]
 
-        def success(session, host):
-            self.__session = session
+        session   = [None]
+        error     = [None]
+        cancelled = [False]
+
+        # connect to the host - this
+        # is performed on a separate
+        # thread
+        def connect():
+            for host in hosts:
+                try:
+                    session[0] = xnat.connect(host,
+                                              user=username,
+                                              password=password)
+                    hosts[:]   = [host]
+                    break
+
+                except Exception as e:
+                    error[0] = e
+                    if cancelled[0]:
+                        break
+
+        # called by the progress dialog
+        # when either the connect function
+        # has finished, or the user has
+        # cancelled the dialog.
+        def finish(completed):
+            cancelled[0] = completed
+
+            if completed:
+                if session[0] is not None: success()
+                else:                      failure()
+
+            callback(completed and session[0] is not None)
+
+        def success():
+            sess = session[0]
+            host = hosts[  0]
+
+            self.__session = sess
             self.__host.SetValue(host)
             self.__connect.SetLabel(LABELS['disconnect'])
             self.__status.SetLabel(LABELS['connected'])
@@ -611,44 +656,24 @@ class XNATBrowserPanel(wx.Panel):
             if host not in self.__knownAccounts:
                 self.__knownAccounts[host] = (username, password)
 
-        def failure(error):
+        def failure():
             if showError:
                 status.reportError(
                     LABELS['connect.error.title'],
                     LABELS['connect.error.message'].format(host),
-                    error)
+                    error[0])
 
-        cancelled = [False]
-
-        def connect():
-
-            error = None
-
-            for host in hosts:
-                try:
-                    session = xnat.connect(host,
-                                           user=username,
-                                           password=password)
-
-                    if not cancelled[0]:
-                        wx.CallAfter(success, session, host)
-                    return
-
-                except Exception as e:
-                    error = e
-                    if cancelled[0]:
-                        return
-
-            if not cancelled[0]:
-                wx.CallAfter(failure, error)
-
-        cancelled[0] = not progress.Bounce.runWithBounce(
-            connect,
-            'Connecting',
-            LABELS['connecting'].format(host),
-            style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT)
-
-        return not cancelled[0] and self.__session is not None
+        # run the connect function on a
+        # separate thread, and call the
+        # finish function either when it
+        # finishes, or when the user
+        # cancels the progress dialog.
+        progress.runWithBounce(connect,
+                               'Connecting',
+                               LABELS['connecting'].format(host),
+                               parent=self,
+                               style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL,
+                               callback=finish)
 
 
     def EndSession(self):
@@ -931,15 +956,19 @@ class XNATBrowserPanel(wx.Panel):
         if username == '': username = None
         if password == '': password = None
 
-        if not self.StartSession(host, username, password):
-            return
+        def onConnect(success):
 
-        projects = self.__session.projects
-        projects = [p.id for p in projects.listing]
+            if not success:
+                return
 
-        self.__project.SetItems(projects)
-        self.__project.SetSelection(0)
-        self.__onProject()
+            projects = self.__session.projects
+            projects = [p.id for p in projects.listing]
+
+            self.__project.SetItems(projects)
+            self.__project.SetSelection(0)
+            self.__onProject()
+
+        self.StartSession(host, username, password, callback=onConnect)
 
 
     def __onProject(self, ev=None):
