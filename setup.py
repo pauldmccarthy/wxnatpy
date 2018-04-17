@@ -8,6 +8,7 @@
 
 from __future__ import print_function
 
+import sys
 import os.path as op
 
 from setuptools import setup
@@ -17,8 +18,13 @@ basedir = op.dirname(__file__)
 
 # Dependencies are listed in requirements.txt
 install_requires = open(op.join(basedir, 'requirements.txt'), 'rt').readlines()
-setup_requires   = ['pytest-runner'],
-tests_require    = ['coverage', 'pytest-cov', 'pytest-runner', 'pytest'],
+setup_requires   = []
+
+if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
+    setup_requires.extend(['coverage',
+                           'pytest-cov',
+                           'pytest-runner',
+                           'pytest'])
 
 # Extract the version number from wxnat/__init__.py
 version = {}
@@ -57,6 +63,5 @@ setup(
     include_package_data=True,
     install_requires=install_requires,
     setup_requires=setup_requires,
-    tests_require=tests_require,
     test_suite='wxnat/tests',
 )
