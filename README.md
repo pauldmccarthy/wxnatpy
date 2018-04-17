@@ -19,14 +19,20 @@ on top of `wxPython` and
 
 
 ```sh
-pip install --pre wxnatpy
+pip install wxnatpy
 ```
 
 
-**Important** `wnatpy` depends on `wxpython 4` which, as of October 2017 has
-not yet been officially released. Therefore, you need to add the `--pre` flag
-when installing via `pip`. Under Linux, you will also need to have the
-`wxpython` compile-time dependencies available in order to install `wxpython`.
+**Important note for Linux users** `wnatpy` depends on `wxpython 4` which, for
+Linux platforms, is not available on PyPi.  Therefore, if you are using Linux,
+you will need to install wxPython first - head to
+https://extras.wxpython.org/wxPython4/extras/linux/ and find the directory
+that matches your OS. Then run this command (change the URL accordingly):
+
+
+```sh
+pip install --only-binary wxpython -f https://extras.wxpython.org/wxPython4/extras/linux/gtk2/ubuntu-16.04/ wxpython
+```
 
 
 ## Usage
