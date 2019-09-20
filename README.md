@@ -15,11 +15,20 @@ on top of `wxPython` and
 ## Installation
 
 
-`wxnatpy` is on [PyPi](https://pypi.python.org/) - install it throuygh `pip`:
+`wxnatpy` is on [PyPi](https://pypi.python.org/) - install it through `pip`:
 
 
 ```sh
 pip install wxnatpy
+```
+
+
+`wxnatpy` is also on [conda-forge](https://conda-forge.org/) - install it
+through `conda`:
+
+
+```sh
+conda install -c conda-forge wxnatpy
 ```
 
 
