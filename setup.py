@@ -46,6 +46,7 @@ setup(
     version=version,
     description='wxPython XNAT repository browser',
     long_description=readme,
+    long_description_content_type='text/markdown',
     url='https://github.com/pauldmccarthy/wxnatpy',
     author='Paul McCarthy',
     author_email='pauldmccarthy@gmail.com',
@@ -55,8 +56,7 @@ setup(
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3',
         'Topic :: Software Development :: Libraries :: Python Modules'],
 
     packages=['wxnat'],
