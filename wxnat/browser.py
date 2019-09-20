@@ -333,6 +333,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__browser.AssignImageList(imageList)
 
         self.__filter.SetItems([LABELS[f] for f in self.__filters.keys()])
+        self.__filter.SetSelection(0)
 
         self.__hostLabel     = wx.StaticText(self)
         self.__usernameLabel = wx.StaticText(self)
