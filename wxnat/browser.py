@@ -1271,22 +1271,46 @@ class XNATBrowserDialog(wx.Dialog):
         self.__sizer.Layout()
         self.__sizer.Fit(self)
 
-        self.__download.Bind(wx.EVT_BUTTON, self.__onDownload)
-        self.__close   .Bind(wx.EVT_BUTTON, self.__onClose)
+        self.__panel   .Bind(EVT_XNAT_ITEM_HIGHLIGHT_EVENT, self.__onHighlight)
+        self.__panel   .Bind(EVT_XNAT_FILE_SELECT_EVENT,    self.__onDownload)
+        self.__download.Bind(wx.EVT_BUTTON,                 self.__onDownload)
+        self.__close   .Bind(wx.EVT_BUTTON,                 self.__onClose)
+
+        # download button only enabled when
+        # one or more files are selected
+        self.__download.Disable()
+
+
+    @property
+    def browser(self):
+        """Return a reference to the :class:`XNATBrowserPanel`. """
+        return self.__panel
+
+
+    def __onHighlight(self, ev):
+        """Called when the item selection in the tree browser is changed.
+        Enables/disables the download button depending on whether any
+        files are highlighted.
+        """
+        self.__download.Enable(len(self.__panel.GetSelectedFiles()) > 0)
 
 
     def __onDownload(self, ev):
-        """Called when the *Close* button is pushed. Prompts the user to
+        """Called when the *Download* button is pushed. Prompts the user to
         select a local directory to download the files to, then downloads
         all of the selected files.
         """
+
+        files = self.__panel.GetSelectedFiles()
+
+        if len(files) == 0:
+            return
 
         dlg = wx.DirDialog(self, 'Select a download location')
 
         if dlg.ShowModal() != wx.ID_OK:
             return
 
-        files   = self.__panel.GetSelectedFiles()
         destDir = dlg.GetPath()
 
         for fobj in files:
