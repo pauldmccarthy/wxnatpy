@@ -580,6 +580,11 @@ class XNATBrowserPanel(wx.Panel):
                      callback=None):
         """Opens a connection  to the given host, and updates the interface.
 
+        Calls to this method return immediately - the connection is
+        established on a separate thread. The ``callback`` argument can be
+        used to be notified when the connection is established (or if it could
+        not be established).
+
         :arg host:      XNAT host to connect to
         :arg username:  Username
         :arg password:  Password
@@ -588,7 +593,7 @@ class XNATBrowserPanel(wx.Panel):
         :arg callback:  Function which will be called when the connection has
                         been made. The function is passed a single boolean
                         parameter, indicating whether or not the conncetion
-                        was a success.
+                        was established.
         """
 
         def defaultCallback(success):

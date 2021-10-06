@@ -9,11 +9,13 @@
 """
 
 
-__version__ = '0.3.2'
+__version__ = '0.4.0'
 """The ``wxnat`` version number. """
 
 
 from wxnat.browser import (XNATBrowserPanel,
                            XNATBrowserDialog,
                            XNATFileSelectEvent,
-                           EVT_XNAT_FILE_SELECT_EVENT)
+                           XNATItemHighlightEvent,
+                           EVT_XNAT_FILE_SELECT_EVENT,
+                           EVT_XNAT_ITEM_HIGHLIGHT_EVENT)
