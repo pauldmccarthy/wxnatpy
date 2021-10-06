@@ -650,6 +650,9 @@ class XNATBrowserPanel(wx.Panel):
             self.__connect.SetLabel(LABELS['disconnect'])
             self.__status.SetLabel(LABELS['connected'])
             self.__status.SetForegroundColour('#00ff00')
+            self.__host    .Disable()
+            self.__username.Disable()
+            self.__password.Disable()
 
             # Add every successful connection
             # to the known hosts/accounts store
@@ -677,9 +680,6 @@ class XNATBrowserPanel(wx.Panel):
                                parent=self,
                                style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL,
                                callback=finish)
-        self.__host    .Disable()
-        self.__username.Disable()
-        self.__password.Disable()
 
 
     def EndSession(self):
@@ -1122,15 +1122,26 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def __onTreeHighlight(self, ev=None, item=None):
-        """Called when an item is highlighted in the tree browser. Displays
-        some metadata about the item in the information panel.
+        """Called when one or more items is highlighted in the tree browser.
+        Displays some metadata about the first highlighted item in the
+        information panel. Emits a :class:`XNATItemHighlightEvent` containing
+        information about all highlighted items.
         """
 
         if ev is not None:
             ev.Skip()
-            item = ev.GetItem()
 
-        obj, level = getTreeData(self.__browser, item)
+        if item is not None: items = [item]
+        else:                items = self.__browser.GetSelections()
+
+        if len(items) == 0:
+            return
+
+        objs, levels = zip(*[getTreeData(self.__browser, i) for i in items])
+
+        # show info about the first highlighted item
+        item       = items[0]
+        obj, level = objs[0], levels[0]
         rows       = [
             ('Type', LABELS[level]),
         ]
@@ -1163,12 +1174,28 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__info.Refresh()
 
+        # emit a highlight event with info about
+        # all highlighted items, but not if this
+        # function was called programmatically
+        if ev is not None:
+            log.debug('Emitting item highlight event: %s',
+                      [getattr(o, XNAT_NAME_ATT[l])
+                       for o, l in zip(objs, levels)])
+            ev = XNATItemHighlightEvent(objs=objs, levels=levels)
+            ev.SetEventObject(self)
+            wx.PostEvent(self, ev)
 
-_XNATFileSelectEvent, _EVT_XNAT_FILE_SELECT_EVENT = wxevent.NewEvent()
+
+_XNATFileSelectEvent,    _EVT_XNAT_FILE_SELECT_EVENT    = wxevent.NewEvent()
+_XNATItemHighlightEvent, _EVT_XNAT_ITEM_HIGHLIGHT_EVENT = wxevent.NewEvent()
 
 
 EVT_XNAT_FILE_SELECT_EVENT = _EVT_XNAT_FILE_SELECT_EVENT
 """Identifier for the :data:`XNATFileSelectEvent`. """
+
+
+EVT_XNAT_ITEM_HIGHLIGHT_EVENT = _EVT_XNAT_ITEM_HIGHLIGHT_EVENT
+"""Identifier for the :data:`XNATItemHighlightEvent`. """
 
 
 XNATFileSelectEvent = _XNATFileSelectEvent
@@ -1180,6 +1207,16 @@ Contains an attribute ``paths``, containing a list of paths, each of may be
 passed to the :meth:`XNATBrowserPanel.download` method to download the file.
 """
 
+
+XNATItemHighlightEvent = _XNATItemHighlightEvent
+"""Event emitted when one or more items in the XNAT tree viewer are
+highlighted.
+
+Contains attributes:
+  - ``objs``:   List containing the ``xnat`` objects that are highlighted.
+  - ``levels``: List containing the type of each highlighted object (its level
+     in the XNAT hierarchy) - one of ``project``, ``subject``, ``experiment``,
+     ``assessor``, ``scan``, ``resource``, or ``file``.
 """
 
 
