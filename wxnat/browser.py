@@ -654,6 +654,11 @@ class XNATBrowserPanel(wx.Panel):
             self.__username.Disable()
             self.__password.Disable()
 
+            # populate the projects dropdown
+            projects = self.__session.projects
+            projects = [p.id for p in projects.listing]
+            self.__project.SetItems(projects)
+
             # Add every successful connection
             # to the known hosts/accounts store
             host = host.strip('https://')
@@ -982,11 +987,6 @@ class XNATBrowserPanel(wx.Panel):
 
             if not success:
                 return
-
-            projects = self.__session.projects
-            projects = [p.id for p in projects.listing]
-
-            self.__project.SetItems(projects)
             self.__project.SetSelection(0)
             self.__onProject()
 
@@ -1134,10 +1134,27 @@ class XNATBrowserPanel(wx.Panel):
         if item is not None: items = [item]
         else:                items = self.__browser.GetSelections()
 
+        self.__info.ClearGrid()
+
+        if len(items) > 0:
+            objs, levels = zip(*[getTreeData(self.__browser, i)
+                                 for i in items])
+        else:
+            objs, levels = [], []
+
+        # emit a highlight event with info about
+        # all highlighted items, but not if this
+        # function was called programmatically
+        if ev is not None:
+            log.debug('Emitting item highlight event: %s',
+                      [getattr(o, XNAT_NAME_ATT[l])
+                       for o, l in zip(objs, levels)])
+            ev = XNATItemHighlightEvent(objs=objs, levels=levels)
+            ev.SetEventObject(self)
+            wx.PostEvent(self, ev)
+
         if len(items) == 0:
             return
-
-        objs, levels = zip(*[getTreeData(self.__browser, i) for i in items])
 
         # show info about the first highlighted item
         item       = items[0]
@@ -1165,25 +1182,13 @@ class XNATBrowserPanel(wx.Panel):
 
                 rows.append((catt, nchildren))
 
-        self.__info.ClearGrid()
         self.__info.SetGridSize(len(rows), 2, growCols=(1, ))
-
         for i, (header, value) in enumerate(rows):
             self.__info.SetText(i, 0, header)
             self.__info.SetText(i, 1, value)
 
         self.__info.Refresh()
 
-        # emit a highlight event with info about
-        # all highlighted items, but not if this
-        # function was called programmatically
-        if ev is not None:
-            log.debug('Emitting item highlight event: %s',
-                      [getattr(o, XNAT_NAME_ATT[l])
-                       for o, l in zip(objs, levels)])
-            ev = XNATItemHighlightEvent(objs=objs, levels=levels)
-            ev.SetEventObject(self)
-            wx.PostEvent(self, ev)
 
 
 _XNATFileSelectEvent,    _EVT_XNAT_FILE_SELECT_EVENT    = wxevent.NewEvent()
