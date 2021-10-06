@@ -1063,45 +1063,62 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def __onTreeSelect(self, ev=None, item=None):
-        """Called when an item in the tree is double-clicked (or enter is
-        pushed when an item is highlighted). If the item is a file, a
-        :class:`XNATFileSelectEvent` is generated. Otherwise, if any
-        children for the item have not yet been added, they are retrieved
-        and added to the tree.
+        """Called when an item in the tree is double-clicked, or enter is
+        pushed when one or more items is highlighted.
+
+        If any of the items are files, a :class:`XNATFileSelectEvent` is
+        generated, containing the paths to all selected files.
+
+        If any non-file items are selected, and their children have not yet
+        been added, they are retrieved and added to the tree.
         """
 
         if ev is not None:
-            item = ev.GetItem()
             ev.Skip()
+
+        if item is not None: items = [item]
+        else:                items = self.__browser.GetSelections()
 
         # Retrieve the XNAT object and its level
         # in the hierarchy from the tree browser.
-        obj, level = getTreeData(self.__browser, item)
+        items = [[i] + getTreeData(self.__browser, i) for i in items]
 
-        # When a file gets activated,
+        # When any files get selected
         # post a file select event
-        if level == 'file':
-            ev = XNATFileSelectEvent(path=obj.uri)
+        filePaths = []
+
+        for item, obj, level in items:
+
+            # Store the paths to all
+            # selected file items
+            if level == 'file':
+                filePaths.append(obj.uri)
+
+            # Download the children for this
+            # non-file item if not already done
+            #
+            # TODO For objects with a larger number of children:
+            #
+            #       - show a dialog, allow the user to cancel the
+            #         request
+            #         OR
+            #       - Only load up to e.g. 100 items, and have a
+            #         button allowing the user to load more
+            #         OR
+            #       - Prompt the user to select a range of items
+            #         to load
+            elif self.__browser.GetChildrenCount(item) == 0:
+                log.debug('Expanding %s item %s', level,
+                          getattr(obj, XNAT_NAME_ATT[level]))
+                self.__expandTreeItem(obj, level, item)
+
+        # Emit a file select event
+        # if any files were selected
+        if len(filePaths) > 0:
+            log.debug('Emitting file select event: %s', filePaths)
+            ev = XNATFileSelectEvent(paths=filePaths)
             ev.SetEventObject(self)
             wx.PostEvent(self, ev)
-            return
-
-        # This item has already been expanded
-        if self.__browser.GetChildrenCount(item) > 0:
-            return
-
-        # TODO For objects with a larger number of children:
-        #
-        #       - show a dialog, allow the user to cancel the
-        #         request
-        #         OR
-        #       - Only load up to e.g. 100 items, and have a
-        #         button allowing the user to load more
-        #         OR
-        #       - Prompt the user to select a range of items
-        #         to load
-
-        self.__expandTreeItem(obj, level, item)
 
 
     def __onTreeHighlight(self, ev=None, item=None):
@@ -1126,8 +1143,8 @@ class XNATBrowserPanel(wx.Panel):
             if val is not None:
                 rows.append((LABELS[key], fmt(val)))
             else:
-                log.warning('{}.{} attribute is missing on '
-                            '{}'.format(level, att, obj))
+                log.warning('%s.%s attribute is missing '
+                            'on %s', level, att, obj)
 
         if level in XNAT_HIERARCHY:
             for catt in XNAT_HIERARCHY[level]:
@@ -1155,10 +1172,14 @@ EVT_XNAT_FILE_SELECT_EVENT = _EVT_XNAT_FILE_SELECT_EVENT
 
 
 XNATFileSelectEvent = _XNATFileSelectEvent
-"""Event emitted when a file item in the XNAT tree viewer is selected,
-either by it being double-clicked, or with the enter key pressed while
-it is highlighted. Contains an attribute ``path``, which may be passed
-to the :meth:`XNATBrowserPanel.download` method to download the file.
+"""Event emitted when one or more file items in the XNAT tree viewer are
+selected, either by an item being double-clicked, or with the enter key
+pressed while one or more files is highlighted.
+
+Contains an attribute ``paths``, containing a list of paths, each of may be
+passed to the :meth:`XNATBrowserPanel.download` method to download the file.
+"""
+
 """
 
 
