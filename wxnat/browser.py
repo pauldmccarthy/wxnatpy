@@ -276,7 +276,8 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__filters.update(**filters)
 
-        self.__host       = at.AutoTextCtrl(self)
+        self.__host       = at.AutoTextCtrl(self,
+                                            style=at.ATC_NO_PROPAGATE_ENTER)
         self.__username   = pt.PlaceholderTextCtrl(self,
                                                    placeholder='username',
                                                    style=wx.TE_PROCESS_ENTER)
