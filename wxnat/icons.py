@@ -35,7 +35,7 @@ def loadBitmap(iconb64):
     iconbytes = b64.b64decode(iconb64)
     success   = False
 
-    if fwidgets.wxversion() == fwidgets.WX_PHOENIX:
+    if fwidgets.wxFlavour() == fwidgets.WX_PHOENIX:
         image   = wx.Image()
         success = wx.Image.LoadFile(image, BytesIO(iconbytes))
     else:

@@ -185,7 +185,7 @@ def getTreeData(tree, item):
     or wxPhoenix is used.
     """
     data = tree.GetItemData(item)
-    if fw.wxversion() == fw.WX_PHOENIX: return data
+    if fw.wxFlavour() == fw.WX_PHOENIX: return data
     else:                               return data.GetData()
 
 
