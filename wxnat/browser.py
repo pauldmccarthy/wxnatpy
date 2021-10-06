@@ -808,7 +808,7 @@ class XNATBrowserPanel(wx.Panel):
 
                 data = [child, catt]
 
-                if fw.wxversion() == fw.WX_PYTHON:
+                if fw.wxFlavour() == fw.WX_PYTHON:
                     data = wx.TreeItemData(data)
 
                 childItem = self.__browser.AppendItem(
@@ -1021,7 +1021,7 @@ class XNATBrowserPanel(wx.Panel):
         # browser.
         data = [self.__session.projects[project], 'project']
 
-        if fw.wxversion() == fw.WX_PYTHON:
+        if fw.wxFlavour() == fw.WX_PYTHON:
             data = wx.TreeItemData(data)
 
         root = self.__browser.AddRoot(
