@@ -288,10 +288,12 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__host       = at.AutoTextCtrl(self)
         self.__username   = pt.PlaceholderTextCtrl(self,
-                                                   placeholder='username')
+                                                   placeholder='username',
+                                                   style=wx.TE_PROCESS_ENTER)
         self.__password   = pt.PlaceholderTextCtrl(self,
                                                    placeholder='password',
-                                                   style=wx.TE_PASSWORD)
+                                                   style=(wx.TE_PASSWORD |
+                                                          wx.TE_PROCESS_ENTER))
         self.__connect    = wx.Button(self)
         self.__status     = wx.StaticText(self)
         self.__project    = wx.Choice(self)
@@ -352,8 +354,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterLabel  .SetLabel(LABELS['filter'])
         self.__refresh      .SetLabel(LABELS['refresh'])
 
-        filterTooltip = wx.ToolTip(TOOLTIPS['filter.{}'.format(filterType)])
-
+        filterTooltip = TOOLTIPS['filter.{}'.format(filterType)]
         self.__filterLabel.SetToolTip(filterTooltip)
         self.__filter     .SetToolTip(filterTooltip)
         self.__filterText .SetToolTip(filterTooltip)
@@ -402,14 +403,16 @@ class XNATBrowserPanel(wx.Panel):
 
         self.SetSizer(self.__mainSizer)
 
-        self.__host   .Bind(at.EVT_ATC_TEXT_ENTER,      self.__onHost)
-        self.__connect.Bind(wx.EVT_BUTTON,              self.__onConnect)
-        self.__project.Bind(wx.EVT_CHOICE,              self.__onProject)
-        self.__refresh.Bind(wx.EVT_BUTTON,              self.__onRefresh)
-        self.__filter .Bind(wx.EVT_CHOICE,              self.__onFilter)
-        self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.__onTreeActivate)
-        self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
-        self.__filterText.Bind(wx.EVT_TEXT_ENTER,       self.__onFilterText)
+        self.__host    .Bind(at.EVT_ATC_TEXT_ENTER,      self.__onHost)
+        self.__username.Bind(wx.EVT_TEXT_ENTER,          self.__onUsername)
+        self.__password.Bind(wx.EVT_TEXT_ENTER,          self.__onPassword)
+        self.__connect .Bind(wx.EVT_BUTTON,              self.__onConnect)
+        self.__project .Bind(wx.EVT_CHOICE,              self.__onProject)
+        self.__refresh .Bind(wx.EVT_BUTTON,              self.__onRefresh)
+        self.__filter  .Bind(wx.EVT_CHOICE,              self.__onFilter)
+        self.__browser .Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.__onTreeActivate)
+        self.__browser .Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
+        self.__filterText.Bind(wx.EVT_TEXT_ENTER,        self.__onFilterText)
 
         self.__updateFilter()
         self.EndSession()
@@ -675,6 +678,9 @@ class XNATBrowserPanel(wx.Panel):
                                parent=self,
                                style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL,
                                callback=finish)
+        self.__host    .Disable()
+        self.__username.Disable()
+        self.__password.Disable()
 
 
     def EndSession(self):
@@ -695,6 +701,9 @@ class XNATBrowserPanel(wx.Panel):
         self.__browser.DeleteAllItems()
         self.__info.ClearGrid()
         self.__info.Refresh()
+        self.__host    .Enable()
+        self.__username.Enable()
+        self.__password.Enable()
 
 
     def __getTreeContents(self):
@@ -932,16 +941,29 @@ class XNATBrowserPanel(wx.Panel):
         :meth:`__init__`, the username/password fields are populated.
         """
 
-        ev.Skip()
-
         host               = self.__host.GetValue()
         username, password = self.__knownAccounts.get(host, (None, None))
 
         if username is not None: self.__username.SetValue(username)
         if password is not None: self.__password.SetValue(password)
+        self.__onConnect()
 
 
-    def __onConnect(self, ev):
+    def __onUsername(self, ev):
+        """Called when the user presses enter in the username field.
+        Behaves as if they had pushed the *Connect* button.
+        """
+        self.__onConnect()
+
+
+    def __onPassword(self, ev):
+        """Called when the user presses enter in the password field.
+        Behaves as if they had pushed the *Connect* button.
+        """
+        self.__onConnect()
+
+
+    def __onConnect(self, ev=None):
         """Called when the *Connect* button is pushed. Attempts to start
         a session with the XNAT host.
         """
