@@ -435,8 +435,11 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def DownloadFile(self, fobj, dest, showProgress=True):
-        """Download the given ``xnat`` file object to the path specified by
-        ``dest``.
+        """Download the given ``xnat.FileData`` file object to the path
+        specified by ``dest``.
+
+        See the :func:`generateFilePath` function for a quick way to
+        generate a unique file path.
 
         :arg fobj:         An XNAT file object, as returned by
                            :meth:`GetSelectedFiles`.
@@ -537,6 +540,7 @@ class XNATBrowserPanel(wx.Panel):
         errMsg   = LABELS['download.error.message'].format(fname)
 
         with status.reportIfError(errTitle, errMsg, raiseError=False):
+            log.debug('Downloading file %s to %s', fobj.uri, dest)
             with open(dest, 'wb') as f:
                 fobj.download_stream(f, update_func=update)
 
