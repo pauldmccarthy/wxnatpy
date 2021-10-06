@@ -94,7 +94,6 @@ LABELS = {
     'connect'      : 'Connect',
     'disconnect'   : 'Disconnect',
     'connecting'   : 'Connecting to {} ...',
-    'project'      : 'Project',
     'refresh'      : 'Refresh',
     'filter'       : 'Filter by',
     'connected'    : u'\u2022',
@@ -136,7 +135,6 @@ LABELS = {
     'assessor'    : 'Assessor',
     'resource'    : 'Resource',
     'resources'   : 'Resources',
-    'resource'    : 'Resource',
     'files'       : 'Files',
     'file'        : 'File',
 
@@ -328,9 +326,7 @@ class XNATBrowserPanel(wx.Panel):
 
         imageList = wx.ImageList(16, 16)
         for i in images:
-            imageList.Add(images[0])
-            imageList.Add(images[1])
-            imageList.Add(images[2])
+            imageList.Add(i)
 
         self.__browser.AssignImageList(imageList)
 
@@ -489,7 +485,7 @@ class XNATBrowserPanel(wx.Panel):
                     break
 
                 # skip
-                elif choice == wx.ID_CANCEL:
+                if choice == wx.ID_CANCEL:
                     return None
 
                 # choose a new destination
