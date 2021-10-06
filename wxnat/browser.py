@@ -399,16 +399,19 @@ class XNATBrowserPanel(wx.Panel):
 
         self.SetSizer(self.__mainSizer)
 
-        self.__host    .Bind(at.EVT_ATC_TEXT_ENTER,      self.__onHost)
-        self.__username.Bind(wx.EVT_TEXT_ENTER,          self.__onUsername)
-        self.__password.Bind(wx.EVT_TEXT_ENTER,          self.__onPassword)
-        self.__connect .Bind(wx.EVT_BUTTON,              self.__onConnect)
-        self.__project .Bind(wx.EVT_CHOICE,              self.__onProject)
-        self.__refresh .Bind(wx.EVT_BUTTON,              self.__onRefresh)
-        self.__filter  .Bind(wx.EVT_CHOICE,              self.__onFilter)
-        self.__browser .Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.__onTreeActivate)
-        self.__browser .Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
-        self.__filterText.Bind(wx.EVT_TEXT_ENTER,        self.__onFilterText)
+        self.__host      .Bind(at.EVT_ATC_TEXT_ENTER,self.__onHost)
+        self.__username  .Bind(wx.EVT_TEXT_ENTER,    self.__onUsername)
+        self.__password  .Bind(wx.EVT_TEXT_ENTER,    self.__onPassword)
+        self.__connect   .Bind(wx.EVT_BUTTON,        self.__onConnect)
+        self.__project   .Bind(wx.EVT_CHOICE,        self.__onProject)
+        self.__refresh   .Bind(wx.EVT_BUTTON,        self.__onRefresh)
+        self.__filter    .Bind(wx.EVT_CHOICE,        self.__onFilter)
+        self.__browser   .Bind(wx.EVT_TREE_ITEM_ACTIVATED,
+                               self.__onTreeSelect)
+        self.__browser   .Bind(wx.EVT_TREE_SEL_CHANGED,
+                               self.__onTreeHighlight)
+        self.__filterText.Bind(wx.EVT_TEXT_ENTER,
+                               self.__onFilterText)
 
         self.__updateFilter()
         self.EndSession()
@@ -1021,7 +1024,7 @@ class XNATBrowserPanel(wx.Panel):
             data=data,
             image=self.__unloadedFolderImageId)
 
-        self.__onTreeSelect(item=root)
+        self.__onTreeHighlight(item=root)
 
 
     def __onRefresh(self, ev):
@@ -1059,7 +1062,7 @@ class XNATBrowserPanel(wx.Panel):
             self.__refreshTree()
 
 
-    def __onTreeActivate(self, ev=None, item=None):
+    def __onTreeSelect(self, ev=None, item=None):
         """Called when an item in the tree is double-clicked (or enter is
         pushed when an item is highlighted). If the item is a file, a
         :class:`XNATFileSelectEvent` is generated. Otherwise, if any
@@ -1093,7 +1096,7 @@ class XNATBrowserPanel(wx.Panel):
         #         request
         #         OR
         #       - Only load up to e.g. 100 items, and have a
-        #         button  allowing the user to load more
+        #         button allowing the user to load more
         #         OR
         #       - Prompt the user to select a range of items
         #         to load
@@ -1101,7 +1104,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__expandTreeItem(obj, level, item)
 
 
-    def __onTreeSelect(self, ev=None, item=None):
+    def __onTreeHighlight(self, ev=None, item=None):
         """Called when an item is highlighted in the tree browser. Displays
         some metadata about the item in the information panel.
         """
