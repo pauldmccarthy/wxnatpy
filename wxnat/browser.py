@@ -760,28 +760,30 @@ class XNATBrowserPanel(wx.Panel):
         return buildTree(browser.GetRootItem())
 
 
-    def __expandTreeItem(self, obj, level, treeItem):
+    def __expandTreeItem(self, treeItem, recursive=False):
         """Expands the contents of the given ``treeItem`` in the tree browser.
         For each child level of the item's level in the XNAT hierarchy, any
         child objects are retrieved from the XNAT repository and added as items
         in the tree browser.
 
-        :arg obj:      XNAT object
+        :arg treeItem:  ``wx.TreeItemId`` corresponding to ``obj``
 
-        :arg level:    Level of ``obj`` in the XNAT hierarchy
+        :arg recursive: Recursively expand ``obj`` and all of its children.
 
-        :arg treeItem: ``wx.TreeItemId`` corresponding to ``obj``
-
-        :returns:      A mapping of the form: ``{ xnat_id : (xnat_obj,
-                       wx.TreeItemId) }``, containing the newly created
-                       ``wx.TreeItemId`` objects orresponding to the
-                       children of ``obj``.
+        :returns:       A mapping of the form: ``{ xnat_id : (xnat_obj,
+                        wx.TreeItemId) }``, containing the newly created
+                        ``wx.TreeItemId`` objects orresponding to the
+                        children of ``obj``.
         """
+
+        obj, level = self.__browser.GetItemData(treeItem)
 
         childItems = {}
 
-        if level != 'file':
-            self.__browser.SetItemImage(treeItem, self.__loadedFolderImageId)
+        if level == 'file':
+            return childItems
+
+        self.__browser.SetItemImage(treeItem, self.__loadedFolderImageId)
 
         for catt in XNAT_HIERARCHY[level]:
 
@@ -811,6 +813,9 @@ class XNATBrowserPanel(wx.Panel):
                     data=data)
 
                 childItems[child.id] = (child, childItem)
+
+                if recursive:
+                    self.__expandTreeItem(childItem, True)
 
         return childItems
 
@@ -847,7 +852,7 @@ class XNATBrowserPanel(wx.Panel):
             if len(childNodes) == 0:
                 return
 
-            childItems = self.__expandTreeItem(obj, level, treeItem)
+            childItems = self.__expandTreeItem(treeItem)
 
             # Loop through the nodes of the previous tree
             # state, and expand any that have been newly
@@ -1105,7 +1110,7 @@ class XNATBrowserPanel(wx.Panel):
             elif self.__browser.GetChildrenCount(item) == 0:
                 log.debug('Expanding %s item %s', level,
                           getattr(obj, XNAT_NAME_ATT[level]))
-                self.__expandTreeItem(obj, level, item)
+                self.__expandTreeItem(item)
 
         # Emit a file select event
         # if any files were selected
