@@ -26,7 +26,6 @@ import wx.lib.newevent as wxevent
 
 import xnat
 
-import fsleyes_widgets                      as fw
 import fsleyes_widgets.placeholder_textctrl as pt
 import fsleyes_widgets.autotextctrl         as at
 import fsleyes_widgets.utils.status         as status
@@ -64,7 +63,7 @@ XNAT_NAME_ATT = {
     'subject'    : 'label',
     'experiment' : 'label',
     'assessor'   : 'label',
-    'scan'       : 'type',
+    'scan'       : 'id',
     'resource'   : 'label',
     'file'       : 'id',
 }
@@ -94,7 +93,6 @@ LABELS = {
     'connect'      : 'Connect',
     'disconnect'   : 'Disconnect',
     'connecting'   : 'Connecting to {} ...',
-    'project'      : 'Project',
     'refresh'      : 'Refresh',
     'filter'       : 'Filter by',
     'connected'    : u'\u2022',
@@ -123,6 +121,10 @@ LABELS = {
     'download.error.message' :
     'An error occurred while trying to download {}',
 
+    'expand.error.title'   : 'Error downloading XNAT data',
+    'expand.error.message' :
+    'An error occurred while communicating with the XNAT server',
+
 
     'projects'    : 'Projects',
     'project'     : 'Project',
@@ -136,7 +138,6 @@ LABELS = {
     'assessor'    : 'Assessor',
     'resource'    : 'Resource',
     'resources'   : 'Resources',
-    'resource'    : 'Resource',
     'files'       : 'Files',
     'file'        : 'File',
 
@@ -181,15 +182,6 @@ XNAT_INFO_FORMATTERS = {
 shown in the information panel.
 """
 
-def getTreeData(tree, item):
-    """Returns the data in the given ``wx.TreeCtrl`` associated with the
-    given ``item``. This is done differently depending on whether wxPython
-    or wxPhoenix is used.
-    """
-    data = tree.GetItemData(item)
-    if fw.wxversion() == fw.WX_PHOENIX: return data
-    else:                               return data.GetData()
-
 
 class XNATBrowserPanel(wx.Panel):
     """The ``XNATBrowserPanel`` allows the user to connect to and browse
@@ -219,6 +211,7 @@ class XNATBrowserPanel(wx.Panel):
        EndSession
        SessionActive
        GetSelectedFiles
+       ExpandTreeItem
        DownloadFile
        GetHosts
        GetAccounts
@@ -286,12 +279,15 @@ class XNATBrowserPanel(wx.Panel):
 
         self.__filters.update(**filters)
 
-        self.__host       = at.AutoTextCtrl(self)
+        self.__host       = at.AutoTextCtrl(self,
+                                            style=at.ATC_NO_PROPAGATE_ENTER)
         self.__username   = pt.PlaceholderTextCtrl(self,
-                                                   placeholder='username')
+                                                   placeholder='username',
+                                                   style=wx.TE_PROCESS_ENTER)
         self.__password   = pt.PlaceholderTextCtrl(self,
                                                    placeholder='password',
-                                                   style=wx.TE_PASSWORD)
+                                                   style=(wx.TE_PASSWORD |
+                                                          wx.TE_PROCESS_ENTER))
         self.__connect    = wx.Button(self)
         self.__status     = wx.StaticText(self)
         self.__project    = wx.Choice(self)
@@ -326,9 +322,7 @@ class XNATBrowserPanel(wx.Panel):
 
         imageList = wx.ImageList(16, 16)
         for i in images:
-            imageList.Add(images[0])
-            imageList.Add(images[1])
-            imageList.Add(images[2])
+            imageList.Add(i)
 
         self.__browser.AssignImageList(imageList)
 
@@ -352,8 +346,7 @@ class XNATBrowserPanel(wx.Panel):
         self.__filterLabel  .SetLabel(LABELS['filter'])
         self.__refresh      .SetLabel(LABELS['refresh'])
 
-        filterTooltip = wx.ToolTip(TOOLTIPS['filter.{}'.format(filterType)])
-
+        filterTooltip = TOOLTIPS['filter.{}'.format(filterType)]
         self.__filterLabel.SetToolTip(filterTooltip)
         self.__filter     .SetToolTip(filterTooltip)
         self.__filterText .SetToolTip(filterTooltip)
@@ -402,14 +395,19 @@ class XNATBrowserPanel(wx.Panel):
 
         self.SetSizer(self.__mainSizer)
 
-        self.__host   .Bind(at.EVT_ATC_TEXT_ENTER,      self.__onHost)
-        self.__connect.Bind(wx.EVT_BUTTON,              self.__onConnect)
-        self.__project.Bind(wx.EVT_CHOICE,              self.__onProject)
-        self.__refresh.Bind(wx.EVT_BUTTON,              self.__onRefresh)
-        self.__filter .Bind(wx.EVT_CHOICE,              self.__onFilter)
-        self.__browser.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.__onTreeActivate)
-        self.__browser.Bind(wx.EVT_TREE_SEL_CHANGED,    self.__onTreeSelect)
-        self.__filterText.Bind(wx.EVT_TEXT_ENTER,       self.__onFilterText)
+        self.__host      .Bind(at.EVT_ATC_TEXT_ENTER,self.__onHost)
+        self.__username  .Bind(wx.EVT_TEXT_ENTER,    self.__onUsername)
+        self.__password  .Bind(wx.EVT_TEXT_ENTER,    self.__onPassword)
+        self.__connect   .Bind(wx.EVT_BUTTON,        self.__onConnect)
+        self.__project   .Bind(wx.EVT_CHOICE,        self.__onProject)
+        self.__refresh   .Bind(wx.EVT_BUTTON,        self.__onRefresh)
+        self.__filter    .Bind(wx.EVT_CHOICE,        self.__onFilter)
+        self.__browser   .Bind(wx.EVT_TREE_ITEM_ACTIVATED,
+                               self.__onTreeSelect)
+        self.__browser   .Bind(wx.EVT_TREE_SEL_CHANGED,
+                               self.__onTreeHighlight)
+        self.__filterText.Bind(wx.EVT_TEXT_ENTER,
+                               self.__onFilterText)
 
         self.__updateFilter()
         self.EndSession()
@@ -424,7 +422,7 @@ class XNATBrowserPanel(wx.Panel):
 
         for i in items:
 
-            obj, level = getTreeData(self.__browser, i)
+            obj, level = self.__browser.GetItemData(i)
 
             if level == 'file':
                 files.append(obj)
@@ -433,8 +431,11 @@ class XNATBrowserPanel(wx.Panel):
 
 
     def DownloadFile(self, fobj, dest, showProgress=True):
-        """Download the given ``xnat`` file object to the path specified by
-        ``dest``.
+        """Download the given ``xnat.FileData`` file object to the path
+        specified by ``dest``.
+
+        See the :func:`generateFilePath` function for a quick way to
+        generate a unique file path.
 
         :arg fobj:         An XNAT file object, as returned by
                            :meth:`GetSelectedFiles`.
@@ -486,7 +487,7 @@ class XNATBrowserPanel(wx.Panel):
                     break
 
                 # skip
-                elif choice == wx.ID_CANCEL:
+                if choice == wx.ID_CANCEL:
                     return None
 
                 # choose a new destination
@@ -535,6 +536,7 @@ class XNATBrowserPanel(wx.Panel):
         errMsg   = LABELS['download.error.message'].format(fname)
 
         with status.reportIfError(errTitle, errMsg, raiseError=False):
+            log.debug('Downloading file %s to %s', fobj.uri, dest)
             with open(dest, 'wb') as f:
                 fobj.download_stream(f, update_func=update)
 
@@ -578,6 +580,11 @@ class XNATBrowserPanel(wx.Panel):
                      callback=None):
         """Opens a connection  to the given host, and updates the interface.
 
+        Calls to this method return immediately - the connection is
+        established on a separate thread. The ``callback`` argument can be
+        used to be notified when the connection is established (or if it could
+        not be established).
+
         :arg host:      XNAT host to connect to
         :arg username:  Username
         :arg password:  Password
@@ -586,7 +593,7 @@ class XNATBrowserPanel(wx.Panel):
         :arg callback:  Function which will be called when the connection has
                         been made. The function is passed a single boolean
                         parameter, indicating whether or not the conncetion
-                        was a success.
+                        was established.
         """
 
         def defaultCallback(success):
@@ -648,6 +655,14 @@ class XNATBrowserPanel(wx.Panel):
             self.__connect.SetLabel(LABELS['disconnect'])
             self.__status.SetLabel(LABELS['connected'])
             self.__status.SetForegroundColour('#00ff00')
+            self.__host    .Disable()
+            self.__username.Disable()
+            self.__password.Disable()
+
+            # populate the projects dropdown
+            projects = self.__session.projects
+            projects = [p.id for p in projects.listing]
+            self.__project.SetItems(projects)
 
             # Add every successful connection
             # to the known hosts/accounts store
@@ -695,6 +710,71 @@ class XNATBrowserPanel(wx.Panel):
         self.__browser.DeleteAllItems()
         self.__info.ClearGrid()
         self.__info.Refresh()
+        self.__host    .Enable()
+        self.__username.Enable()
+        self.__password.Enable()
+
+
+    def ExpandTreeItem(self, treeItem, recursive=False):
+        """Expands the contents of the given ``treeItem`` in the tree browser.
+        For each child level of the item's level in the XNAT hierarchy, any
+        child objects are retrieved from the XNAT repository and added as items
+        in the tree browser.
+
+        :arg treeItem:  ``wx.TreeItemId`` corresponding to ``obj``
+
+        :arg recursive: Recursively expand ``obj`` and all of its children.
+
+        :returns:       A mapping of the form: ``{ xnat_id : (xnat_obj,
+                        wx.TreeItemId) }``, containing the newly created
+                        ``wx.TreeItemId`` objects orresponding to the
+                        children of ``obj``.
+        """
+
+        browser    = self.__browser
+        obj, level = browser.GetItemData(treeItem)
+
+        childItems = {}
+
+        if level == 'file':
+            return childItems
+
+        self.__browser.SetItemImage(treeItem, self.__loadedFolderImageId)
+
+        for catt in XNAT_HIERARCHY[level]:
+
+            children = getattr(obj, catt, None)
+            catt     = catt[:-1]
+
+            if children is None:
+                continue
+
+            for child in children.listing:
+
+                name  = getattr(child, XNAT_NAME_ATT[catt])
+                label = LABELS[catt]
+
+                if self.__filterItem(catt, name):
+                    continue
+
+                if catt == 'file': image = self.__fileImageId
+                else:              image = self.__unloadedFolderImageId
+
+                data = [child, catt]
+
+                childItem = browser.AppendItem(
+                    treeItem,
+                    '{} {}'.format(label, name),
+                    image=image,
+                    data=data)
+
+                childItems[child.id] = (child, childItem)
+
+                if recursive:
+                    self.ExpandTreeItem(childItem, True)
+                    browser.ExpandAllChildren(childItem)
+
+        return childItems
 
 
     def __getTreeContents(self):
@@ -728,7 +808,7 @@ class XNATBrowserPanel(wx.Panel):
         #    ('level', 'id', [children], expanded)
         def buildTree(treeItem):
 
-            obj, level = getTreeData(browser, treeItem)
+            obj, level = browser.GetItemData(treeItem)
             children   = []
 
             node = (obj.id, level, children, browser.IsExpanded(treeItem))
@@ -746,64 +826,6 @@ class XNATBrowserPanel(wx.Panel):
         return buildTree(browser.GetRootItem())
 
 
-    def __expandTreeItem(self, obj, level, treeItem):
-        """Expands the contents of the given ``treeItem`` in the tree browser.
-        For each child level of the item's level in the XNAT hierarchy, any
-        child objects are retrieved from the XNAT repository and added as items
-        in the tree browser.
-
-        :arg obj:      XNAT object
-
-        :arg level:    Level of ``obj`` in the XNAT hierarchy
-
-        :arg treeItem: ``wx.TreeItemId`` corresponding to ``obj``
-
-        :returns:      A mapping of the form: ``{ xnat_id : (xnat_obj,
-                       wx.TreeItemId) }``, containing the newly created
-                       ``wx.TreeItemId`` objects orresponding to the
-                       children of ``obj``.
-        """
-
-        childItems = {}
-
-        if level != 'file':
-            self.__browser.SetItemImage(treeItem, self.__loadedFolderImageId)
-
-        for catt in XNAT_HIERARCHY[level]:
-
-            children = getattr(obj, catt, None)
-            catt     = catt[:-1]
-
-            if children is None:
-                continue
-
-            for child in children.listing:
-
-                name  = getattr(child, XNAT_NAME_ATT[catt])
-                label = LABELS[catt]
-
-                if self.__filterItem(catt, name):
-                    continue
-
-                if catt == 'file': image = self.__fileImageId
-                else:              image = self.__unloadedFolderImageId
-
-                data = [child, catt]
-
-                if fw.wxversion() == fw.WX_PYTHON:
-                    data = wx.TreeItemData(data)
-
-                childItem = self.__browser.AppendItem(
-                    treeItem,
-                    '{} {}'.format(label, name),
-                    image=image,
-                    data=data)
-
-                childItems[child.id] = (child, childItem)
-
-        return childItems
-
-
     def __refreshTree(self):
         """Called by various things. Re-generates the current state of the
         tree browser.
@@ -815,9 +837,9 @@ class XNATBrowserPanel(wx.Panel):
         rootNode = self.__getTreeContents()
         rootItem = browser.GetRootItem()
         selItem  = browser.GetFocusedItem()
-        rootObj  = getTreeData(browser, rootItem)[0]
+        rootObj  = browser.GetItemData(rootItem)[0]
 
-        if selItem.IsOk(): selObj = getTreeData(browser, selItem)[0]
+        if selItem.IsOk(): selObj = browser.GetItemData(selItem)[0]
         else:              selObj = None
 
         # Now clear the tree, and regenerate
@@ -836,7 +858,7 @@ class XNATBrowserPanel(wx.Panel):
             if len(childNodes) == 0:
                 return
 
-            childItems = self.__expandTreeItem(obj, level, treeItem)
+            childItems = self.ExpandTreeItem(treeItem)
 
             # Loop through the nodes of the previous tree
             # state, and expand any that have been newly
@@ -932,16 +954,29 @@ class XNATBrowserPanel(wx.Panel):
         :meth:`__init__`, the username/password fields are populated.
         """
 
-        ev.Skip()
-
         host               = self.__host.GetValue()
         username, password = self.__knownAccounts.get(host, (None, None))
 
         if username is not None: self.__username.SetValue(username)
         if password is not None: self.__password.SetValue(password)
+        self.__onConnect()
 
 
-    def __onConnect(self, ev):
+    def __onUsername(self, ev):
+        """Called when the user presses enter in the username field.
+        Behaves as if they had pushed the *Connect* button.
+        """
+        self.__onConnect()
+
+
+    def __onPassword(self, ev):
+        """Called when the user presses enter in the password field.
+        Behaves as if they had pushed the *Connect* button.
+        """
+        self.__onConnect()
+
+
+    def __onConnect(self, ev=None):
         """Called when the *Connect* button is pushed. Attempts to start
         a session with the XNAT host.
         """
@@ -961,11 +996,6 @@ class XNATBrowserPanel(wx.Panel):
 
             if not success:
                 return
-
-            projects = self.__session.projects
-            projects = [p.id for p in projects.listing]
-
-            self.__project.SetItems(projects)
             self.__project.SetSelection(0)
             self.__onProject()
 
@@ -995,15 +1025,12 @@ class XNATBrowserPanel(wx.Panel):
         # browser.
         data = [self.__session.projects[project], 'project']
 
-        if fw.wxversion() == fw.WX_PYTHON:
-            data = wx.TreeItemData(data)
-
         root = self.__browser.AddRoot(
             '{} {}'.format(label, project),
             data=data,
             image=self.__unloadedFolderImageId)
 
-        self.__onTreeSelect(item=root)
+        self.__onTreeHighlight(item=root)
 
 
     def __onRefresh(self, ev):
@@ -1041,58 +1068,112 @@ class XNATBrowserPanel(wx.Panel):
             self.__refreshTree()
 
 
-    def __onTreeActivate(self, ev=None, item=None):
-        """Called when an item in the tree is double-clicked (or enter is
-        pushed when an item is highlighted). If the item is a file, a
-        :class:`XNATFileSelectEvent` is generated. Otherwise, if any
-        children for the item have not yet been added, they are retrieved
-        and added to the tree.
+    def __onTreeSelect(self, ev=None, item=None):
+        """Called when an item in the tree is double-clicked, or enter is
+        pushed when one or more items is highlighted.
+
+        If any of the items are files, a :class:`XNATFileSelectEvent` is
+        generated, containing the paths to all selected files.
+
+        If any non-file items are selected, and their children have not yet
+        been added, they are retrieved and added to the tree.
         """
 
         if ev is not None:
-            item = ev.GetItem()
             ev.Skip()
+
+        if item is not None: items = [item]
+        else:                items = self.__browser.GetSelections()
 
         # Retrieve the XNAT object and its level
         # in the hierarchy from the tree browser.
-        obj, level = getTreeData(self.__browser, item)
+        items = [[i] + self.__browser.GetItemData(i) for i in items]
 
-        # When a file gets activated,
+        # When any files get selected
         # post a file select event
-        if level == 'file':
-            ev = XNATFileSelectEvent(path=obj.uri)
+        filePaths = []
+
+        for item, obj, level in items:
+
+            # Store the paths to all
+            # selected file items
+            if level == 'file':
+                filePaths.append(obj.uri)
+
+            # Download the children for this
+            # non-file item if not already done
+            #
+            # TODO For objects with a larger number of children:
+            #
+            #       - show a dialog, allow the user to cancel the
+            #         request
+            #         OR
+            #       - Only load up to e.g. 100 items, and have a
+            #         button allowing the user to load more
+            #         OR
+            #       - Prompt the user to select a range of items
+            #         to load
+            elif self.__browser.GetChildrenCount(item) == 0:
+                log.debug('Expanding %s item %s', level,
+                          getattr(obj, XNAT_NAME_ATT[level]))
+
+                # scan level is always recursively expanded
+                self.Disable()
+                wx.SafeYield()
+                try:
+                    errTitle = LABELS['expand.error.title']
+                    errMsg   = LABELS['expand.error.message']
+                    with status.reportIfError(errTitle, errMsg, False):
+                        self.ExpandTreeItem(item, level == 'scan')
+                finally:
+                    self.Enable()
+
+        # Emit a file select event
+        # if any files were selected
+        if len(filePaths) > 0:
+            log.debug('Emitting file select event: %s', filePaths)
+            ev = XNATFileSelectEvent(paths=filePaths)
             ev.SetEventObject(self)
             wx.PostEvent(self, ev)
-            return
-
-        # This item has already been expanded
-        if self.__browser.GetChildrenCount(item) > 0:
-            return
-
-        # TODO For objects with a larger number of children:
-        #
-        #       - show a dialog, allow the user to cancel the
-        #         request
-        #         OR
-        #       - Only load up to e.g. 100 items, and have a
-        #         button  allowing the user to load more
-        #         OR
-        #       - Prompt the user to select a range of items
-        #         to load
-
-        self.__expandTreeItem(obj, level, item)
 
 
-    def __onTreeSelect(self, ev=None, item=None):
-        """Called when an item is highlighted in the tree browser. Displays
-        some metadata about the item in the information panel.
+    def __onTreeHighlight(self, ev=None, item=None):
+        """Called when one or more items is highlighted in the tree browser.
+        Displays some metadata about the first highlighted item in the
+        information panel. Emits a :class:`XNATItemHighlightEvent` containing
+        information about all highlighted items.
         """
 
         if ev is not None:
             ev.Skip()
-            item = ev.GetItem()
 
-        obj, level = getTreeData(self.__browser, item)
+        if item is not None: items = [item]
+        else:                items = self.__browser.GetSelections()
+
+        self.__info.ClearGrid()
+
+        if len(items) > 0:
+            objs, levels = zip(*[self.__browser.GetItemData(i) for i in items])
+        else:
+            objs, levels = [], []
+
+        # emit a highlight event with info about
+        # all highlighted items, but not if this
+        # function was called programmatically
+        if ev is not None:
+            log.debug('Emitting item highlight event: %s',
+                      [getattr(o, XNAT_NAME_ATT[l])
+                       for o, l in zip(objs, levels)])
+            ev = XNATItemHighlightEvent(objs=objs, levels=levels)
+            ev.SetEventObject(self)
+            wx.PostEvent(self, ev)
+
+        if len(items) == 0:
+            return
+
+        # show info about the first highlighted item
+        item       = items[0]
+        obj, level = objs[0], levels[0]
         rows       = [
             ('Type', LABELS[level]),
         ]
@@ -1105,20 +1186,10 @@ class XNATBrowserPanel(wx.Panel):
             if val is not None:
                 rows.append((LABELS[key], fmt(val)))
             else:
-                log.warning('{}.{} attribute is missing on '
-                            '{}'.format(level, att, obj))
+                log.warning('%s.%s attribute is missing '
+                            'on %s', level, att, obj)
 
-        if level in XNAT_HIERARCHY:
-            for catt in XNAT_HIERARCHY[level]:
-
-                nchildren = str(len(getattr(obj, catt, [])))
-                catt      = LABELS[catt]
-
-                rows.append((catt, nchildren))
-
-        self.__info.ClearGrid()
         self.__info.SetGridSize(len(rows), 2, growCols=(1, ))
-
         for i, (header, value) in enumerate(rows):
             self.__info.SetText(i, 0, header)
             self.__info.SetText(i, 1, value)
@@ -1126,18 +1197,37 @@ class XNATBrowserPanel(wx.Panel):
         self.__info.Refresh()
 
 
-_XNATFileSelectEvent, _EVT_XNAT_FILE_SELECT_EVENT = wxevent.NewEvent()
+_XNATFileSelectEvent,    _EVT_XNAT_FILE_SELECT_EVENT    = wxevent.NewEvent()
+_XNATItemHighlightEvent, _EVT_XNAT_ITEM_HIGHLIGHT_EVENT = wxevent.NewEvent()
 
 
 EVT_XNAT_FILE_SELECT_EVENT = _EVT_XNAT_FILE_SELECT_EVENT
 """Identifier for the :data:`XNATFileSelectEvent`. """
 
 
+EVT_XNAT_ITEM_HIGHLIGHT_EVENT = _EVT_XNAT_ITEM_HIGHLIGHT_EVENT
+"""Identifier for the :data:`XNATItemHighlightEvent`. """
+
+
 XNATFileSelectEvent = _XNATFileSelectEvent
-"""Event emitted when a file item in the XNAT tree viewer is selected,
-either by it being double-clicked, or with the enter key pressed while
-it is highlighted. Contains an attribute ``path``, which may be passed
-to the :meth:`XNATBrowserPanel.download` method to download the file.
+"""Event emitted when one or more file items in the XNAT tree viewer are
+selected, either by an item being double-clicked, or with the enter key
+pressed while one or more files is highlighted.
+
+Contains an attribute ``paths``, containing a list of paths, each of may be
+passed to the :meth:`XNATBrowserPanel.download` method to download the file.
+"""
+
+
+XNATItemHighlightEvent = _XNATItemHighlightEvent
+"""Event emitted when one or more items in the XNAT tree viewer are
+highlighted.
+
+Contains attributes:
+  - ``objs``:   List containing the ``xnat`` objects that are highlighted.
+  - ``levels``: List containing the type of each highlighted object (its level
+     in the XNAT hierarchy) - one of ``project``, ``subject``, ``experiment``,
+     ``assessor``, ``scan``, ``resource``, or ``file``.
 """
 
 
@@ -1187,22 +1277,46 @@ class XNATBrowserDialog(wx.Dialog):
         self.__sizer.Layout()
         self.__sizer.Fit(self)
 
-        self.__download.Bind(wx.EVT_BUTTON, self.__onDownload)
-        self.__close   .Bind(wx.EVT_BUTTON, self.__onClose)
+        self.__panel   .Bind(EVT_XNAT_ITEM_HIGHLIGHT_EVENT, self.__onHighlight)
+        self.__panel   .Bind(EVT_XNAT_FILE_SELECT_EVENT,    self.__onDownload)
+        self.__download.Bind(wx.EVT_BUTTON,                 self.__onDownload)
+        self.__close   .Bind(wx.EVT_BUTTON,                 self.__onClose)
+
+        # download button only enabled when
+        # one or more files are selected
+        self.__download.Disable()
+
+
+    @property
+    def browser(self):
+        """Return a reference to the :class:`XNATBrowserPanel`. """
+        return self.__panel
+
+
+    def __onHighlight(self, ev):
+        """Called when the item selection in the tree browser is changed.
+        Enables/disables the download button depending on whether any
+        files are highlighted.
+        """
+        self.__download.Enable(len(self.__panel.GetSelectedFiles()) > 0)
 
 
     def __onDownload(self, ev):
-        """Called when the *Close* button is pushed. Prompts the user to
+        """Called when the *Download* button is pushed. Prompts the user to
         select a local directory to download the files to, then downloads
         all of the selected files.
         """
+
+        files = self.__panel.GetSelectedFiles()
+
+        if len(files) == 0:
+            return
 
         dlg = wx.DirDialog(self, 'Select a download location')
 
         if dlg.ShowModal() != wx.ID_OK:
             return
 
-        files   = self.__panel.GetSelectedFiles()
         destDir = dlg.GetPath()
 
         for fobj in files:

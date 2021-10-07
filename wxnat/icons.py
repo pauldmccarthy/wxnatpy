@@ -11,13 +11,10 @@ image files.
 """
 
 
+import           io
 import base64 as b64
 
-from six import BytesIO, StringIO
-
 import wx
-
-import fsleyes_widgets as fwidgets
 
 
 class IconError(Exception):
@@ -35,12 +32,8 @@ def loadBitmap(iconb64):
     iconbytes = b64.b64decode(iconb64)
     success   = False
 
-    if fwidgets.wxversion() == fwidgets.WX_PHOENIX:
-        image   = wx.Image()
-        success = wx.Image.LoadFile(image, BytesIO(iconbytes))
-    else:
-        image   = wx.EmptyImage()
-        success = wx.Image.LoadStream(image, StringIO(iconbytes))
+    image   = wx.Image()
+    success = wx.Image.LoadFile(image, io.BytesIO(iconbytes))
 
     if not success:
         raise IconError('Error loading icon')

@@ -5,8 +5,10 @@
 # Author: Paul McCarthy <pauldmccarthy@gmail.com>
 #
 
+import time
 
 import wx
+
 
 
 def run_with_wx(func, *args, **kwargs):
@@ -51,3 +53,9 @@ def run_with_wx(func, *args, **kwargs):
         raise raised[0]
 
     return result[0]
+
+
+def yield_until(condition):
+    while not condition():
+        time.sleep(0.1)
+        wx.Yield()
