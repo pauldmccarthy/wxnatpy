@@ -26,7 +26,6 @@ import wx.lib.newevent as wxevent
 
 import xnat
 
-import fsleyes_widgets                      as fw
 import fsleyes_widgets.placeholder_textctrl as pt
 import fsleyes_widgets.autotextctrl         as at
 import fsleyes_widgets.utils.status         as status
@@ -64,7 +63,7 @@ XNAT_NAME_ATT = {
     'subject'    : 'label',
     'experiment' : 'label',
     'assessor'   : 'label',
-    'scan'       : 'type',
+    'scan'       : 'id',
     'resource'   : 'label',
     'file'       : 'id',
 }
@@ -122,6 +121,10 @@ LABELS = {
     'download.error.message' :
     'An error occurred while trying to download {}',
 
+    'expand.error.title'   : 'Error downloading XNAT data',
+    'expand.error.message' :
+    'An error occurred while communicating with the XNAT server',
+
 
     'projects'    : 'Projects',
     'project'     : 'Project',
@@ -178,7 +181,6 @@ XNAT_INFO_FORMATTERS = {
 """This dictionary contains string formatters for some attributes that are
 shown in the information panel.
 """
-
 
 
 class XNATBrowserPanel(wx.Panel):
@@ -729,7 +731,8 @@ class XNATBrowserPanel(wx.Panel):
                         children of ``obj``.
         """
 
-        obj, level = self.__browser.GetItemData(treeItem)
+        browser    = self.__browser
+        obj, level = browser.GetItemData(treeItem)
 
         childItems = {}
 
@@ -759,7 +762,7 @@ class XNATBrowserPanel(wx.Panel):
 
                 data = [child, catt]
 
-                childItem = self.__browser.AppendItem(
+                childItem = browser.AppendItem(
                     treeItem,
                     '{} {}'.format(label, name),
                     image=image,
@@ -769,6 +772,7 @@ class XNATBrowserPanel(wx.Panel):
 
                 if recursive:
                     self.ExpandTreeItem(childItem, True)
+                    browser.ExpandAllChildren(childItem)
 
         return childItems
 
@@ -1112,7 +1116,17 @@ class XNATBrowserPanel(wx.Panel):
             elif self.__browser.GetChildrenCount(item) == 0:
                 log.debug('Expanding %s item %s', level,
                           getattr(obj, XNAT_NAME_ATT[level]))
-                self.ExpandTreeItem(item)
+
+                # scan level is always recursively expanded
+                self.Disable()
+                wx.SafeYield()
+                try:
+                    errTitle = LABELS['expand.error.title']
+                    errMsg   = LABELS['expand.error.message']
+                    with status.reportIfError(errTitle, errMsg, False):
+                        self.ExpandTreeItem(item, level == 'scan')
+                finally:
+                    self.Enable()
 
         # Emit a file select event
         # if any files were selected
@@ -1174,14 +1188,6 @@ class XNATBrowserPanel(wx.Panel):
             else:
                 log.warning('%s.%s attribute is missing '
                             'on %s', level, att, obj)
-
-        if level in XNAT_HIERARCHY:
-            for catt in XNAT_HIERARCHY[level]:
-
-                nchildren = str(len(getattr(obj, catt, [])))
-                catt      = LABELS[catt]
-
-                rows.append((catt, nchildren))
 
         self.__info.SetGridSize(len(rows), 2, growCols=(1, ))
         for i, (header, value) in enumerate(rows):
